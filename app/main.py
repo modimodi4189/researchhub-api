@@ -1,0 +1,34 @@
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+from app.core.config import settings
+from app.api.v1.auth.router import router as auth_router
+from app.api.v1.papers.router import router as papers_router
+from app.api.v1.collections.router import router as collections_router
+
+app = FastAPI(
+    title=settings.APP_NAME,
+    description="AI-powered research paper organization API with semantic search",
+    version="0.1.0",
+)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+app.include_router(auth_router, prefix="/api/v1")
+app.include_router(papers_router, prefix="/api/v1")
+app.include_router(collections_router, prefix="/api/v1")
+
+
+@app.get("/")
+async def root():
+    return {"message": "Welcome to ResearchHub API"}
+
+
+@app.get("/health")
+async def health_check():
+    return {"status": "healthy"}
