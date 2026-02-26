@@ -1,14 +1,26 @@
+from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from app.core.config import settings
 from app.api.v1.auth.router import router as auth_router
 from app.api.v1.papers.router import router as papers_router
 from app.api.v1.collections.router import router as collections_router
+from app.db.models import Base
+from app.db.database import engine
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    async with engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    yield
+
 
 app = FastAPI(
     title=settings.APP_NAME,
     description="AI-powered research paper organization API with semantic search",
     version="0.1.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
