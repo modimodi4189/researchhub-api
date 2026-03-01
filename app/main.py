@@ -5,6 +5,7 @@ from app.core.config import settings
 from app.api.v1.auth.router import router as auth_router
 from app.api.v1.papers.router import router as papers_router
 from app.api.v1.collections.router import router as collections_router
+from app.api.v1.search.router import router as search_router
 from app.db.models import Base
 from app.db.database import engine
 
@@ -34,6 +35,7 @@ app.add_middleware(
 app.include_router(auth_router, prefix="/api/v1")
 app.include_router(papers_router, prefix="/api/v1")
 app.include_router(collections_router, prefix="/api/v1")
+app.include_router(search_router, prefix="/api/v1")
 
 
 @app.get("/")

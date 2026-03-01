@@ -6,6 +6,9 @@ from app.db.database import get_db
 from app.db.models import Paper, User
 from app.schemas.schemas import PaperCreate, PaperUpdate, PaperResponse
 from app.api.deps import get_current_user
+from app.ml.summarizer import summarize_text
+from app.ml.classifier import classify_paper
+from app.ml.index_manager import add_paper_to_index
 
 router = APIRouter(prefix="/papers", tags=["Papers"])
 
@@ -28,6 +31,17 @@ async def create_paper(
     db.add(new_paper)
     await db.commit()
     await db.refresh(new_paper)
+    
+    if new_paper.content:
+        try:
+            add_paper_to_index(
+                paper_id=new_paper.id,
+                text=new_paper.content,
+                owner_id=current_user.id,
+                is_public=new_paper.is_public
+            )
+        except Exception as e:
+            print(f"Error adding to index: {e}")
     
     return new_paper
 
@@ -107,3 +121,48 @@ async def delete_paper(
     await db.commit()
     
     return None
+
+
+@router.post("/{paper_id}/summarize")
+async def summarize_paper(
+    paper_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    result = await db.execute(select(Paper).where(Paper.id == paper_id))
+    paper = result.scalar_one_or_none()
+    
+    if not paper:
+        raise HTTPException(status_code=404, detail="Paper not found")
+    
+    if not paper.is_public and paper.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    if not paper.content:
+        return {"summary": "No content to summarize"}
+    
+    summary = summarize_text(paper.content)
+    return {"paper_id": paper_id, "summary": summary}
+
+
+@router.post("/{paper_id}/classify")
+async def classify_paper_endpoint(
+    paper_id: int,
+    db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user)
+):
+    result = await db.execute(select(Paper).where(Paper.id == paper_id))
+    paper = result.scalar_one_or_none()
+    
+    if not paper:
+        raise HTTPException(status_code=404, detail="Paper not found")
+    
+    if not paper.is_public and paper.owner_id != current_user.id:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    text_to_classify = paper.content or paper.abstract or paper.title
+    if not text_to_classify:
+        return {"category": "unknown", "confidence": 0.0}
+    
+    classification = classify_paper(text_to_classify)
+    return {"paper_id": paper_id, **classification}
