@@ -1,6 +1,10 @@
 from contextlib import asynccontextmanager
-from fastapi import FastAPI
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import Limiter
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from fastapi.responses import JSONResponse
 from app.core.config import settings
 from app.api.v1.auth.router import router as auth_router
 from app.api.v1.papers.router import router as papers_router
@@ -8,6 +12,8 @@ from app.api.v1.collections.router import router as collections_router
 from app.api.v1.search.router import router as search_router
 from app.db.models import Base
 from app.db.database import engine
+
+limiter = Limiter(key_func=get_remote_address)
 
 
 @asynccontextmanager
@@ -23,6 +29,16 @@ app = FastAPI(
     version="0.1.0",
     lifespan=lifespan,
 )
+
+app.state.limiter = limiter
+
+
+@app.exception_handler(RateLimitExceeded)
+async def rate_limit_handler(request: Request, exc: RateLimitExceeded):
+    return JSONResponse(
+        status_code=429,
+        content={"detail": "Rate limit exceeded. Please try again later."}
+    )
 
 app.add_middleware(
     CORSMiddleware,
