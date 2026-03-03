@@ -17,3 +17,7 @@ faiss-cpu==1.7.4
 transformers==4.36.2
 torch==2.1.2
 scikit-learn==1.4.0
+
+# Async Processing
+redis==5.0.1
+celery==5.3.4
