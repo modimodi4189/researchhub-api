@@ -1,16 +1,38 @@
 from datetime import datetime
 from typing import List, Optional
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, ConfigDict
 
 
 class UserCreate(BaseModel):
     email: EmailStr
     password: str
+    
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "email": "user@example.com",
+                    "password": "password123"
+                }
+            ]
+        }
+    )
 
 
 class UserLogin(BaseModel):
     email: EmailStr
     password: str
+    
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "email": "user@example.com",
+                    "password": "password123"
+                }
+            ]
+        }
+    )
 
 
 class UserResponse(BaseModel):
@@ -42,6 +64,20 @@ class PaperCreate(BaseModel):
     content: Optional[str] = None
     is_public: bool = False
     category_id: Optional[int] = None
+    
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "title": "Machine Learning Introduction",
+                    "abstract": "An overview of ML concepts",
+                    "content": "Full paper content goes here...",
+                    "is_public": True,
+                    "category_id": 1
+                }
+            ]
+        }
+    )
 
 
 class PaperUpdate(BaseModel):
@@ -50,6 +86,17 @@ class PaperUpdate(BaseModel):
     content: Optional[str] = None
     is_public: Optional[bool] = None
     category_id: Optional[int] = None
+    
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "title": "Updated Title",
+                    "is_public": False
+                }
+            ]
+        }
+    )
 
 
 class PaperResponse(BaseModel):
@@ -68,6 +115,16 @@ class PaperResponse(BaseModel):
 
 class CollectionCreate(BaseModel):
     name: str
+    
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "name": "My ML Papers"
+                }
+            ]
+        }
+    )
 
 
 class CollectionResponse(BaseModel):
@@ -87,6 +144,17 @@ class CollectionWithPapers(CollectionResponse):
 class Token(BaseModel):
     access_token: str
     token_type: str
+    
+    model_config = ConfigDict(
+        json_schema_extra={
+            "examples": [
+                {
+                    "access_token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...",
+                    "token_type": "bearer"
+                }
+            ]
+        }
+    )
 
 
 class TokenData(BaseModel):
