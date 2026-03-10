@@ -1,17 +1,23 @@
 import pytest
-from httpx import AsyncClient
+from httpx import AsyncClient, ASGITransport
 from app.main import app
 
 
 @pytest.fixture
+def anyio_backend():
+    return "asyncio"
+
+
+@pytest.fixture
 async def client():
-    async with AsyncClient(app=app, base_url="http://test") as ac:
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as ac:
         yield ac
 
 
 @pytest.fixture
 async def authenticated_client(client):
-    response = await client.post(
+    await client.post(
         "/api/v1/auth/register",
         json={"email": "testuser@test.com", "password": "testpass123"}
     )
@@ -28,7 +34,6 @@ async def authenticated_client(client):
 
 @pytest.mark.asyncio
 async def test_health_check(client):
-    """Integration test: Health endpoint returns 200."""
     response = await client.get("/health")
     assert response.status_code == 200
     assert response.json() == {"status": "healthy"}
@@ -36,7 +41,6 @@ async def test_health_check(client):
 
 @pytest.mark.asyncio
 async def test_root_endpoint(client):
-    """Integration test: Root endpoint returns welcome message."""
     response = await client.get("/")
     assert response.status_code == 200
     assert "message" in response.json()
@@ -44,7 +48,6 @@ async def test_root_endpoint(client):
 
 @pytest.mark.asyncio
 async def test_register_user(client):
-    """Integration test: User registration creates new user."""
     response = await client.post(
         "/api/v1/auth/register",
         json={"email": "newuser@test.com", "password": "password123"}
@@ -56,7 +59,6 @@ async def test_register_user(client):
 
 @pytest.mark.asyncio
 async def test_register_duplicate_email(client):
-    """Integration test: Cannot register with duplicate email."""
     await client.post(
         "/api/v1/auth/register",
         json={"email": "duplicate@test.com", "password": "password123"}
@@ -71,7 +73,6 @@ async def test_register_duplicate_email(client):
 
 @pytest.mark.asyncio
 async def test_login_success(client):
-    """Integration test: Login returns access token."""
     await client.post(
         "/api/v1/auth/register",
         json={"email": "loginuser@test.com", "password": "password123"}
@@ -87,7 +88,6 @@ async def test_login_success(client):
 
 @pytest.mark.asyncio
 async def test_login_invalid_credentials(client):
-    """Integration test: Login fails with wrong password."""
     await client.post(
         "/api/v1/auth/register",
         json={"email": "wrongpass@test.com", "password": "correct"}
@@ -101,7 +101,6 @@ async def test_login_invalid_credentials(client):
 
 @pytest.mark.asyncio
 async def test_create_paper(authenticated_client):
-    """Integration test: Authenticated user can create paper."""
     response = await authenticated_client.post(
         "/api/v1/papers",
         json={
@@ -117,7 +116,6 @@ async def test_create_paper(authenticated_client):
 
 @pytest.mark.asyncio
 async def test_get_papers(authenticated_client):
-    """Integration test: User can list their papers."""
     await authenticated_client.post(
         "/api/v1/papers",
         json={"title": "Paper 1", "content": "Content 1", "is_public": False}
@@ -130,7 +128,6 @@ async def test_get_papers(authenticated_client):
 
 @pytest.mark.asyncio
 async def test_get_paper_by_id(authenticated_client):
-    """Integration test: User can get their own paper."""
     create_response = await authenticated_client.post(
         "/api/v1/papers",
         json={"title": "Specific Paper", "content": "Content", "is_public": False}
@@ -144,7 +141,6 @@ async def test_get_paper_by_id(authenticated_client):
 
 @pytest.mark.asyncio
 async def test_update_paper(authenticated_client):
-    """Integration test: User can update their paper."""
     create_response = await authenticated_client.post(
         "/api/v1/papers",
         json={"title": "Original Title", "content": "Content", "is_public": False}
@@ -161,7 +157,6 @@ async def test_update_paper(authenticated_client):
 
 @pytest.mark.asyncio
 async def test_delete_paper(authenticated_client):
-    """Integration test: User can delete their paper."""
     create_response = await authenticated_client.post(
         "/api/v1/papers",
         json={"title": "To Delete", "content": "Content", "is_public": False}
@@ -174,7 +169,6 @@ async def test_delete_paper(authenticated_client):
 
 @pytest.mark.asyncio
 async def test_create_collection(authenticated_client):
-    """Integration test: User can create a collection."""
     response = await authenticated_client.post(
         "/api/v1/collections",
         json={"name": "My Collection"}
@@ -185,7 +179,6 @@ async def test_create_collection(authenticated_client):
 
 @pytest.mark.asyncio
 async def test_get_collections(authenticated_client):
-    """Integration test: User can list their collections."""
     await authenticated_client.post(
         "/api/v1/collections",
         json={"name": "Collection 1"}
@@ -197,17 +190,11 @@ async def test_get_collections(authenticated_client):
 
 @pytest.mark.asyncio
 async def test_unauthorized_access(client):
-    """Integration test: Cannot access papers without token."""
     response = await client.get("/api/v1/papers")
     assert response.status_code == 403
 
 
 @pytest.mark.asyncio
 async def test_access_other_users_private_paper(client):
-    """Integration test: Cannot access other user's private paper."""
-    # Create user 1 and their paper
-    client.headers["Authorization"] = "Bearer user1_token"
-    # (This would require setting up multiple users in test)
-    # For now, just verify 403/404 for non-existent
     response = await client.get("/api/v1/papers/99999")
     assert response.status_code in [401, 403, 404]
