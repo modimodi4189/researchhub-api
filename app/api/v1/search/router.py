@@ -6,7 +6,7 @@ from app.db.database import get_db
 from app.db.models import Paper, User
 from app.schemas.schemas import PaperResponse
 from app.api.deps import get_current_user
-from app.ml.index_manager import search_user_papers, search_public_papers
+from app.ml.index_manager import search_user_papers as search_user_papers_idx, search_public_papers as search_public_papers_idx
 
 router = APIRouter(prefix="/search", tags=["Search"])
 
@@ -18,7 +18,7 @@ async def search_my_papers(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    paper_ids, _ = search_user_papers(current_user.id, q, k)
+    _, paper_ids = search_user_papers_idx(current_user.id, q, k)
     
     if not paper_ids:
         return []
@@ -38,7 +38,7 @@ async def search_public_papers(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
 ):
-    paper_ids, _ = search_public_papers(q, k)
+    _, paper_ids = search_public_papers_idx(q, k)
     
     if not paper_ids:
         return []
@@ -67,7 +67,7 @@ async def find_similar_papers(
     if not paper.is_public and paper.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="Cannot find similar to private paper")
     
-    paper_ids, _ = search_public_papers(paper.content or paper.title, k)
+    _, paper_ids = search_public_papers_idx(paper.content or paper.title, k)
     
     if not paper_ids:
         return []
