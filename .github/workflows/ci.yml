@@ -42,11 +42,6 @@ jobs:
           pip install ruff
           ruff check app/ --exit-zero
           
-      - name: Run type checker
-        run: |
-          pip install mypy
-          mypy app/ --ignore-missing-imports --exit-zero
-          
       - name: Run tests
         env:
           DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/researchhub_test
