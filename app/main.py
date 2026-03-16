@@ -5,7 +5,9 @@ from slowapi import Limiter
 from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from fastapi.responses import JSONResponse
+from typing import Dict
 from app.core.config import settings
+from app.core.logging import logger
 from app.api.v1.auth.router import router as auth_router
 from app.api.v1.papers.router import router as papers_router
 from app.api.v1.collections.router import router as collections_router
@@ -55,10 +57,10 @@ app.include_router(search_router, prefix="/api/v1")
 
 
 @app.get("/")
-async def root():
+async def root() -> Dict[str, str]:
     return {"message": "Welcome to ResearchHub API"}
 
 
 @app.get("/health")
-async def health_check():
+async def health_check() -> Dict[str, str]:
     return {"status": "healthy"}

@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Dict
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -15,7 +15,7 @@ async def create_collection(
     collection: CollectionCreate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+) -> CollectionResponse:
     new_collection = Collection(
         name=collection.name,
         owner_id=current_user.id
@@ -32,7 +32,7 @@ async def create_collection(
 async def get_collections(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+) -> List[CollectionResponse]:
     result = await db.execute(
         select(Collection).where(Collection.owner_id == current_user.id)
     )
@@ -45,7 +45,7 @@ async def get_collection(
     collection_id: int,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+) -> CollectionWithPapers:
     result = await db.execute(
         select(Collection).where(
             Collection.id == collection_id,
@@ -65,7 +65,7 @@ async def delete_collection(
     collection_id: int,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+) -> None:
     result = await db.execute(
         select(Collection).where(
             Collection.id == collection_id,
@@ -89,7 +89,7 @@ async def add_paper_to_collection(
     paper_id: int,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+) -> Dict[str, str]:
     # Check collection exists and belongs to user
     collection_result = await db.execute(
         select(Collection).where(
@@ -128,7 +128,7 @@ async def remove_paper_from_collection(
     paper_id: int,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+) -> None:
     # Check collection exists and belongs to user
     collection_result = await db.execute(
         select(Collection).where(

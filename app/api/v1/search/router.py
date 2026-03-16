@@ -17,7 +17,7 @@ async def search_my_papers(
     k: int = Query(5, ge=1, le=20),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+) -> List[PaperResponse]:
     _, paper_ids = search_user_papers_idx(current_user.id, q, k)
     
     if not paper_ids:
@@ -37,7 +37,7 @@ async def search_public_papers(
     k: int = Query(5, ge=1, le=20),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+) -> List[PaperResponse]:
     _, paper_ids = search_public_papers_idx(q, k)
     
     if not paper_ids:
@@ -57,7 +57,7 @@ async def find_similar_papers(
     k: int = Query(5, ge=1, le=20),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+) -> List[PaperResponse]:
     result = await db.execute(select(Paper).where(Paper.id == paper_id))
     paper = result.scalar_one_or_none()
     

@@ -1,4 +1,4 @@
-from typing import List
+from typing import List, Dict, Any
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select
@@ -9,6 +9,7 @@ from app.api.deps import get_current_user
 from app.ml.summarizer import summarize_text
 from app.ml.classifier import classify_paper
 from app.ml.index_manager import add_paper_to_index
+from app.core.logging import logger
 
 router = APIRouter(prefix="/papers", tags=["Papers"])
 
@@ -18,7 +19,7 @@ async def create_paper(
     paper: PaperCreate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+) -> PaperResponse:
     new_paper = Paper(
         title=paper.title,
         abstract=paper.abstract,
@@ -32,6 +33,8 @@ async def create_paper(
     await db.commit()
     await db.refresh(new_paper)
     
+    logger.info(f"User {current_user.id} created paper {new_paper.id}: {new_paper.title}")
+    
     if new_paper.content:
         try:
             add_paper_to_index(
@@ -41,7 +44,7 @@ async def create_paper(
                 is_public=new_paper.is_public
             )
         except Exception as e:
-            print(f"Error adding to index: {e}")
+            logger.error(f"Error adding to index: {e}")
     
     return new_paper
 
@@ -50,7 +53,7 @@ async def create_paper(
 async def get_papers(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+) -> List[PaperResponse]:
     result = await db.execute(
         select(Paper).where(Paper.owner_id == current_user.id)
     )
@@ -63,7 +66,7 @@ async def get_paper(
     paper_id: int,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+) -> PaperResponse:
     result = await db.execute(select(Paper).where(Paper.id == paper_id))
     paper = result.scalar_one_or_none()
     
@@ -82,7 +85,7 @@ async def update_paper(
     paper_update: PaperUpdate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+) -> PaperResponse:
     result = await db.execute(select(Paper).where(Paper.id == paper_id))
     paper = result.scalar_one_or_none()
     
@@ -98,6 +101,8 @@ async def update_paper(
     
     await db.commit()
     await db.refresh(paper)
+    
+    logger.info(f"User {current_user.id} updated paper {paper_id}")
     
     return paper
 
@@ -120,6 +125,8 @@ async def delete_paper(
     await db.delete(paper)
     await db.commit()
     
+    logger.info(f"User {current_user.id} deleted paper {paper_id}")
+    
     return None
 
 
@@ -128,7 +135,7 @@ async def summarize_paper(
     paper_id: int,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+) -> Dict[str, Any]:
     result = await db.execute(select(Paper).where(Paper.id == paper_id))
     paper = result.scalar_one_or_none()
     
@@ -150,7 +157,7 @@ async def classify_paper_endpoint(
     paper_id: int,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
-):
+) -> Dict[str, Any]:
     result = await db.execute(select(Paper).where(Paper.id == paper_id))
     paper = result.scalar_one_or_none()
     
