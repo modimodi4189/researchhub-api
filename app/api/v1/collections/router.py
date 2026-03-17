@@ -1,10 +1,10 @@
 from typing import List, Dict
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
 from app.db.database import get_db
 from app.db.models import Collection, Paper, User
-from app.schemas.schemas import CollectionCreate, CollectionResponse, CollectionWithPapers
+from app.schemas.schemas import CollectionCreate, CollectionResponse, CollectionWithPapers, PaginationResponse
 from app.api.deps import get_current_user
 
 router = APIRouter(prefix="/collections", tags=["Collections"])
@@ -28,16 +28,37 @@ async def create_collection(
     return new_collection
 
 
-@router.get("", response_model=List[CollectionResponse])
+@router.get("", response_model=PaginationResponse[CollectionResponse])
 async def get_collections(
+    page: int = Query(1, ge=1, description="Page number"),
+    limit: int = Query(10, ge=1, le=100, description="Items per page"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
-) -> List[CollectionResponse]:
+) -> PaginationResponse[CollectionResponse]:
+    offset = (page - 1) * limit
+    
+    count_result = await db.execute(
+        select(func.count()).where(Collection.owner_id == current_user.id)
+    )
+    total = count_result.scalar() or 0
+    
     result = await db.execute(
-        select(Collection).where(Collection.owner_id == current_user.id)
+        select(Collection)
+        .where(Collection.owner_id == current_user.id)
+        .offset(offset)
+        .limit(limit)
     )
     collections = result.scalars().all()
-    return collections
+    
+    pages = (total + limit - 1) // limit if total > 0 else 0
+    
+    return PaginationResponse(
+        items=list(collections),
+        total=total,
+        page=page,
+        limit=limit,
+        pages=pages
+    )
 
 
 @router.get("/{collection_id}", response_model=CollectionWithPapers)

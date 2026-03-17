@@ -1,10 +1,10 @@
 from typing import List, Dict, Any
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import select, func
 from app.db.database import get_db
 from app.db.models import Paper, User
-from app.schemas.schemas import PaperCreate, PaperUpdate, PaperResponse
+from app.schemas.schemas import PaperCreate, PaperUpdate, PaperResponse, PaginationResponse
 from app.api.deps import get_current_user
 from app.ml.summarizer import summarize_text
 from app.ml.classifier import classify_paper
@@ -49,15 +49,37 @@ async def create_paper(
     return new_paper
 
 
-@router.get("", response_model=List[PaperResponse])
+@router.get("", response_model=PaginationResponse[PaperResponse])
 async def get_papers(
+    page: int = Query(1, ge=1, description="Page number"),
+    limit: int = Query(10, ge=1, le=100, description="Items per page"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user)
-) -> List[PaperResponse]:
+) -> PaginationResponse[PaperResponse]:
+    offset = (page - 1) * limit
+    
+    count_result = await db.execute(
+        select(func.count()).where(Paper.owner_id == current_user.id)
+    )
+    total = count_result.scalar() or 0
+    
     result = await db.execute(
-        select(Paper).where(Paper.owner_id == current_user.id)
+        select(Paper)
+        .where(Paper.owner_id == current_user.id)
+        .offset(offset)
+        .limit(limit)
     )
     papers = result.scalars().all()
+    
+    pages = (total + limit - 1) // limit if total > 0 else 0
+    
+    return PaginationResponse(
+        items=list(papers),
+        total=total,
+        page=page,
+        limit=limit,
+        pages=pages
+    )
     return papers
 
 
