@@ -1,5 +1,4 @@
-from datetime import datetime
-from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, ForeignKey, Table
+from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, ForeignKey, Table, func
 from sqlalchemy.orm import relationship, DeclarativeBase
 
 
@@ -21,7 +20,7 @@ class User(Base):
     id = Column(Integer, primary_key=True, index=True)
     email = Column(String, unique=True, index=True, nullable=False)
     hashed_password = Column(String, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     papers = relationship("Paper", back_populates="owner")
     collections = relationship("Collection", back_populates="owner")
@@ -44,13 +43,15 @@ class Paper(Base):
     title = Column(String, nullable=False)
     abstract = Column(Text, nullable=True)
     content = Column(Text, nullable=True)
+    summary = Column(Text, nullable=True)
     file_path = Column(String, nullable=True)
     is_public = Column(Boolean, default=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
     category_id = Column(Integer, ForeignKey("categories.id"), nullable=True)
-    
+
     owner = relationship("User", back_populates="papers")
     category = relationship("Category", back_populates="papers")
     collections = relationship("Collection", secondary=paper_collections, back_populates="papers")
@@ -61,9 +62,10 @@ class Collection(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-    
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+
     owner_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    
+
     owner = relationship("User", back_populates="collections")
     papers = relationship("Paper", secondary=paper_collections, back_populates="collections")
