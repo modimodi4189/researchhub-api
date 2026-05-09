@@ -12,12 +12,11 @@ def get_embedding_model():
 
 
 def generate_embedding(text: str) -> np.ndarray:
-    model = get_embedding_model()
-    embedding = model.encode(text, convert_to_numpy=True)
-    return embedding
+    embed_model = get_embedding_model()
+    return embed_model.encode(text, convert_to_numpy=True)
+     
 
 
 def generate_embeddings_batch(texts: list[str]) -> np.ndarray:
-    model = get_embedding_model()
-    embeddings = model.encode(texts, convert_to_numpy=True)
-    return embeddings
+    embed_model = get_embedding_model()
+    return embed_model.encode(text, convert_to_numpy=True)

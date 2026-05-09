@@ -19,10 +19,25 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
+      migrate:
+        condition: service_completed_successfully
     volumes:
       - .:/app
       - ml_artifacts:/app/ml_artifacts
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+
+  migrate:
+    build: .
+    command: alembic upgrade head
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/researchhub
+      - SECRET_KEY=your-secret-key-change-this-in-production
+      - DEBUG=False
+    depends_on:
+      postgres:
+        condition: service_healthy
+    volumes:
+      - .:/app
 
   postgres:
     image: postgres:15
@@ -59,6 +74,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_started
+      migrate:
+        condition: service_completed_successfully
     volumes:
       - .:/app
       - ml_artifacts:/app/ml_artifacts

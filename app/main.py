@@ -14,17 +14,18 @@ from app.api.v1.auth.router import router as auth_router
 from app.api.v1.papers.router import router as papers_router
 from app.api.v1.collections.router import router as collections_router
 from app.api.v1.search.router import router as search_router
-from app.db.models import Base
-from app.db.database import engine
 
 limiter = Limiter(key_func=get_remote_address)
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    async with engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+    # Schema is managed by Alembic migrations.
+    # Run `alembic upgrade head` before starting the API.
+    # In Docker this is handled automatically by the migrate service.
+    logger.info("ResearchHub API starting up")
     yield
+    logger.info("ResearchHub API shutting down")
 
 
 app = FastAPI(

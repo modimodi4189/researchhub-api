@@ -5,6 +5,8 @@ venv/
 .idea/
 .vscode/
 *.log
+logs/
 .pytest_cache/
 .DS_Store
 ml_artifacts/
+pytest_output.txt
