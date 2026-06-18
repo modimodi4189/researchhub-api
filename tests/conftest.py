@@ -41,6 +41,7 @@ os.environ["REDIS_URL"] = "redis://localhost:6379/0"
 
 from app.main import app
 from app.db.models import Base
+from app.core.limiter import limiter
 from app.db.database import get_db
 
 # ---------------------------------------------------------------------------
@@ -65,6 +66,18 @@ async def _override_get_db():
 
 
 app.dependency_overrides[get_db] = _override_get_db
+
+
+# ---------------------------------------------------------------------------
+# Database lifecycle — create all tables once per session, drop after.
+# ---------------------------------------------------------------------------
+@pytest_asyncio.fixture(scope="session", autouse=True)
+async def _db_lifecycle():
+    async with _test_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.create_all)
+    yield
+    async with _test_engine.begin() as conn:
+        await conn.run_sync(Base.metadata.drop_all)
 
 
 # ---------------------------------------------------------------------------
