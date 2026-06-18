@@ -45,6 +45,25 @@ from app.core.limiter import limiter
 from app.db.database import get_db
 
 # ---------------------------------------------------------------------------
+# Rate limiting — disabled for the entire test session.
+#
+# The limiter is keyed by source IP. In CI and in local Docker test runs,
+# every test request comes from the same IP (127.0.0.1). The auth_client
+# fixture calls /auth/register + /auth/login for almost every test in the
+# suite, so without this, the real 10/minute limit on those endpoints trips
+# partway through the run — causing later tests to receive a 429 instead of
+# a token pair, which then fails with KeyError: 'access_token' in this file.
+#
+# slowapi's Limiter has a global `enabled` switch that bypasses every
+# @limiter.limit(...) decorator without needing to mock each one individually.
+# ---------------------------------------------------------------------------
+@pytest.fixture(autouse=True, scope="session")
+def _disable_rate_limiting():
+    limiter.enabled = False
+    yield
+    limiter.enabled = True
+
+# ---------------------------------------------------------------------------
 # Test database engine using NullPool.
 #
 # NullPool disables connection pooling entirely — every operation opens a
@@ -66,18 +85,6 @@ async def _override_get_db():
 
 
 app.dependency_overrides[get_db] = _override_get_db
-
-
-# ---------------------------------------------------------------------------
-# Database lifecycle — create all tables once per session, drop after.
-# ---------------------------------------------------------------------------
-@pytest_asyncio.fixture(scope="session", autouse=True)
-async def _db_lifecycle():
-    async with _test_engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
-    yield
-    async with _test_engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
 
 
 # ---------------------------------------------------------------------------
