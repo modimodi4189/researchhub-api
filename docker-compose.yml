@@ -4,8 +4,8 @@ services:
     ports:
       - "8000:8000"
     environment:
-      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/researchhub
-      - SECRET_KEY=your-secret-key-change-this-in-production
+      - DATABASE_URL=postgresql+asyncpg://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/researchhub
+      - SECRET_KEY=${SECRET_KEY}
       - ALGORITHM=HS256
       - ACCESS_TOKEN_EXPIRE_MINUTES=30
       - REFRESH_TOKEN_EXPIRE_DAYS=7
@@ -18,20 +18,19 @@ services:
       postgres:
         condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
       migrate:
         condition: service_completed_successfully
     volumes:
-      - .:/app
       - ml_artifacts:/app/ml_artifacts
-    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2
 
   migrate:
     build: .
     command: alembic upgrade head
     environment:
-      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/researchhub
-      - SECRET_KEY=your-secret-key-change-this-in-production
+      - DATABASE_URL=postgresql+asyncpg://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/researchhub
+      - SECRET_KEY=${SECRET_KEY}
       - DEBUG=False
     depends_on:
       postgres:
@@ -43,7 +42,7 @@ services:
     image: postgres:15
     environment:
       - POSTGRES_USER=postgres
-      - POSTGRES_PASSWORD=postgres
+      - POSTGRES_PASSWORD=${POSTGRES_PASSWORD:-postgres}
       - POSTGRES_DB=researchhub
     ports:
       - "5432:5432"
@@ -59,13 +58,18 @@ services:
     image: redis:7-alpine
     ports:
       - "6379:6379"
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
 
   celery-worker:
     build: .
     command: celery -A app.celery worker --loglevel=info
     environment:
-      - DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/researchhub
-      - SECRET_KEY=your-secret-key-change-this-in-production
+      - DATABASE_URL=postgresql+asyncpg://postgres:${POSTGRES_PASSWORD:-postgres}@postgres:5432/researchhub
+      - SECRET_KEY=${SECRET_KEY}
       - REDIS_URL=redis://redis:6379/0
       - FAISS_INDEX_DIR=/app/ml_artifacts
       - DEBUG=False
@@ -73,11 +77,10 @@ services:
       postgres:
         condition: service_healthy
       redis:
-        condition: service_started
+        condition: service_healthy
       migrate:
         condition: service_completed_successfully
     volumes:
-      - .:/app
       - ml_artifacts:/app/ml_artifacts
 
 volumes:

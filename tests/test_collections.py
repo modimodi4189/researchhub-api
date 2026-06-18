@@ -59,6 +59,8 @@ async def test_get_collection_with_papers(auth_client, created_paper):
     data = r.json()
     assert len(data["papers"]) == 1
     assert data["papers"][0]["id"] == paper_id
+    # Collection paper list uses PaperListResponse — no content field
+    assert "content" not in data["papers"][0]
 
 
 async def test_get_collection_not_found(auth_client):
@@ -84,18 +86,31 @@ async def test_update_collection(auth_client):
     assert r.json()["name"] == "Updated Name"
 
 
+async def test_update_collection_empty_body_is_noop(auth_client):
+    """PATCH with no fields should return the collection unchanged."""
+    client, _ = auth_client
+    coll_r = await client.post("/api/v1/collections", json=COLLECTION_PAYLOAD)
+    coll_id = coll_r.json()["id"]
+    original_name = coll_r.json()["name"]
+
+    r = await client.patch(f"/api/v1/collections/{coll_id}", json={})
+    assert r.status_code == 200
+    assert r.json()["name"] == original_name
+
+
 async def test_update_collection_not_owner(client, auth_client):
     owner_client, _ = auth_client
     coll_r = await owner_client.post("/api/v1/collections", json=COLLECTION_PAYLOAD)
     coll_id = coll_r.json()["id"]
 
-    creds2 = {"email": "intruder@example.com", "password": "intruder123"}
+    creds2 = {"email": "intruder@example.com", "password": "intruder12345"}
     await client.post("/api/v1/auth/register", json=creds2)
     r = await client.post("/api/v1/auth/login", json=creds2)
     client.headers["Authorization"] = f"Bearer {r.json()['access_token']}"
 
     r2 = await client.patch(f"/api/v1/collections/{coll_id}", json={"name": "Hijacked"})
-    assert r2.status_code == 404  # other user's collection is invisible, not just forbidden
+    # Other user's collection is invisible to other users — returns 404, not 403
+    assert r2.status_code == 404
 
 
 # ---------------------------------------------------------------------------

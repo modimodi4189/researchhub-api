@@ -19,7 +19,7 @@ class PaginationResponse(BaseModel, Generic[T]):
 
 class UserCreate(BaseModel):
     email: EmailStr
-    password: str
+    password: str = Field(..., min_length=8)
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -144,6 +144,20 @@ class PaperResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+class PaperListResponse(BaseModel):
+    """Lightweight paper representation for list endpoints. Excludes full content."""
+    id: int
+    title: str
+    abstract: Optional[str]
+    summary: Optional[str]
+    is_public: bool
+    created_at: datetime
+    updated_at: Optional[datetime]
+    owner_id: int
+    category_id: Optional[int]
+ 
+    model_config = ConfigDict(from_attributes=True)
+
 
 # ---------------------------------------------------------------------------
 # Collections
@@ -158,7 +172,7 @@ class CollectionCreate(BaseModel):
 
 
 class CollectionUpdate(BaseModel):
-    name: str
+    name: Optional[str] = Field(None, min_length=1)
 
     model_config = ConfigDict(
         json_schema_extra={"examples": [{"name": "Updated Collection Name"}]}
@@ -176,4 +190,4 @@ class CollectionResponse(BaseModel):
 
 
 class CollectionWithPapers(CollectionResponse):
-    papers: List[PaperResponse] = []
+    papers: List[PaperListResponse] = []

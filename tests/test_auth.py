@@ -29,7 +29,24 @@ async def test_register_duplicate_email(client):
 async def test_register_invalid_email(client):
     r = await client.post(
         "/api/v1/auth/register",
-        json={"email": "not-an-email", "password": "pass123"},
+        json={"email": "not-an-email", "password": "validpassword"},
+    )
+    assert r.status_code == 422
+
+
+async def test_register_password_too_short(client):
+    """Passwords shorter than 8 characters must be rejected at the schema layer."""
+    r = await client.post(
+        "/api/v1/auth/register",
+        json={"email": "shortpass@example.com", "password": "abc123"},
+    )
+    assert r.status_code == 422
+
+
+async def test_register_empty_password(client):
+    r = await client.post(
+        "/api/v1/auth/register",
+        json={"email": "empty@example.com", "password": ""},
     )
     assert r.status_code == 422
 
@@ -60,7 +77,7 @@ async def test_login_wrong_password(client):
 async def test_login_unknown_email(client):
     r = await client.post(
         "/api/v1/auth/login",
-        json={"email": "nobody@example.com", "password": "whatever"},
+        json={"email": "nobody@example.com", "password": "whatever12"},
     )
     assert r.status_code == 401
 

@@ -19,4 +19,4 @@ def generate_embedding(text: str) -> np.ndarray:
 
 def generate_embeddings_batch(texts: list[str]) -> np.ndarray:
     embed_model = get_embedding_model()
-    return embed_model.encode(text, convert_to_numpy=True)
+    return embed_model.encode(texts, convert_to_numpy=True)

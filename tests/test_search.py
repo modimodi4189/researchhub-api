@@ -2,9 +2,8 @@
 Tests for /api/v1/search/* endpoints.
 
 The FAISS index functions are mocked in conftest.py (_mock_ml fixture) so
-these tests verify the HTTP layer, DB lookup, and result shaping — not the
-vector search itself. The index behaviour is exercised separately in the
-unit tests for index_manager.
+these tests verify the HTTP layer, DB lookup, result shaping, and ordering —
+not the vector search itself.
 """
 
 import pytest
@@ -15,10 +14,7 @@ import pytest
 # ---------------------------------------------------------------------------
 
 async def test_search_my_returns_empty_when_no_index_results(auth_client, created_paper):
-    """
-    With the FAISS mock returning empty, search/my should return an empty
-    PaginationResponse rather than an error.
-    """
+    """With the FAISS mock returning empty, search/my returns an empty PaginationResponse."""
     client, _ = auth_client
     r = await client.get("/api/v1/search/my?q=neural+networks&k=5")
     assert r.status_code == 200
@@ -53,6 +49,39 @@ async def test_search_my_returns_papers_when_index_hits(auth_client, created_pap
     data = r.json()
     assert len(data["items"]) == 1
     assert data["items"][0]["id"] == paper_id
+    # Search results use PaperListResponse — no content field
+    assert "content" not in data["items"][0]
+
+
+async def test_search_my_preserves_relevance_order(auth_client, monkeypatch):
+    """
+    Results should come back in the order FAISS returned them (relevance order),
+    not in database storage order.
+    """
+    client, _ = auth_client
+
+    # Create two papers
+    r1 = await client.post(
+        "/api/v1/papers",
+        json={"title": "Paper A", "abstract": "First paper", "is_public": True},
+    )
+    r2 = await client.post(
+        "/api/v1/papers",
+        json={"title": "Paper B", "abstract": "Second paper", "is_public": True},
+    )
+    id_a = r1.json()["id"]
+    id_b = r2.json()["id"]
+
+    # FAISS returns B first (more relevant), then A
+    monkeypatch.setattr(
+        "app.api.v1.search.router.search_user_papers_idx",
+        lambda user_id, query, k: ([], [id_b, id_a]),
+    )
+
+    r = await client.get("/api/v1/search/my?q=test&k=5")
+    assert r.status_code == 200
+    ids = [item["id"] for item in r.json()["items"]]
+    assert ids == [id_b, id_a], "Results must preserve FAISS relevance order"
 
 
 # ---------------------------------------------------------------------------
@@ -110,7 +139,7 @@ async def test_similar_excludes_source_paper(auth_client, created_paper, monkeyp
     client, _ = auth_client
     paper_id = created_paper["id"]
 
-    # Index returns the source paper as the only result.
+    # Index returns the source paper as the only result
     monkeypatch.setattr(
         "app.api.v1.search.router.search_public_papers_idx",
         lambda query, k: ([], [paper_id]),
@@ -123,7 +152,6 @@ async def test_similar_excludes_source_paper(auth_client, created_paper, monkeyp
 
 
 async def test_similar_requires_auth(client, auth_client, created_paper):
-    # Reset auth header
     client.headers.pop("Authorization", None)
     r = await client.get(f"/api/v1/search/similar/{created_paper['id']}")
     assert r.status_code == 403

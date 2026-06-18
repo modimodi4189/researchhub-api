@@ -6,7 +6,7 @@ from sqlalchemy import select
 
 from app.db.database import get_db
 from app.db.models import Paper, User
-from app.schemas.schemas import PaperResponse, PaginationResponse
+from app.schemas.schemas import PaperListResponse, PaginationResponse
 from app.api.deps import get_current_user
 from app.ml.index_manager import (
     search_user_papers as search_user_papers_idx,
@@ -15,14 +15,26 @@ from app.ml.index_manager import (
 
 router = APIRouter(prefix="/search", tags=["Search"])
 
+def _preserve_order(papers: list[Paper], paper_ids: list[int]) -> list[Paper]:
+    """
+    Re-order DB results to match the relevance order returned by FAISS.
+ 
+    SQLAlchemy's IN clause does not preserve the order of the input list —
+    results come back in the database's internal order. This function maps
+    paper_id to Paper and reconstructs the list in FAISS's ranked order,
+    ensuring the most semantically similar results appear first.
+    """
+    paper_map = {p.id: p for p in papers}
+    return [paper_map[pid] for pid in paper_ids if pid in paper_map]
 
-@router.get("/my", response_model=PaginationResponse[PaperResponse])
+
+@router.get("/my", response_model=PaginationResponse[PaperListResponse])
 async def search_my_papers(
     q: str = Query(..., min_length=1, description="Search query"),
     k: int = Query(5, ge=1, le=20, description="Max results to return"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> PaginationResponse[PaperResponse]:
+) -> PaginationResponse[PaperListResponse]:
     loop = asyncio.get_running_loop()
     _, paper_ids = await loop.run_in_executor(
         None, search_user_papers_idx, current_user.id, q, k
@@ -32,10 +44,10 @@ async def search_my_papers(
         return PaginationResponse(items=[], total=0, page=1, limit=k, pages=0)
 
     result = await db.execute(select(Paper).where(Paper.id.in_(paper_ids)))
-    papers = result.scalars().all()
+    papers = _preserve_order(result.scalars().all(), paper_ids)
 
     return PaginationResponse(
-        items=list(papers),
+        items=papers,
         total=len(papers),
         page=1,
         limit=k,
@@ -43,13 +55,13 @@ async def search_my_papers(
     )
 
 
-@router.get("/public", response_model=PaginationResponse[PaperResponse])
+@router.get("/public", response_model=PaginationResponse[PaperListResponse])
 async def search_public_papers(
     q: str = Query(..., min_length=1, description="Search query"),
     k: int = Query(5, ge=1, le=20, description="Max results to return"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> PaginationResponse[PaperResponse]:
+) -> PaginationResponse[PaperListResponse]:
     loop = asyncio.get_running_loop()
     _, paper_ids = await loop.run_in_executor(None, search_public_papers_idx, q, k)
 
@@ -57,10 +69,10 @@ async def search_public_papers(
         return PaginationResponse(items=[], total=0, page=1, limit=k, pages=0)
 
     result = await db.execute(select(Paper).where(Paper.id.in_(paper_ids)))
-    papers = result.scalars().all()
+    papers = _preserve_order(result.scalars().all(), paper_ids)
 
     return PaginationResponse(
-        items=list(papers),
+        items=papers,
         total=len(papers),
         page=1,
         limit=k,
@@ -68,13 +80,13 @@ async def search_public_papers(
     )
 
 
-@router.get("/similar/{paper_id}", response_model=PaginationResponse[PaperResponse])
+@router.get("/similar/{paper_id}", response_model=PaginationResponse[PaperListResponse])
 async def find_similar_papers(
     paper_id: int,
     k: int = Query(5, ge=1, le=20, description="Max results to return"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> PaginationResponse[PaperResponse]:
+) -> PaginationResponse[PaperListResponse]:
     paper_result = await db.execute(select(Paper).where(Paper.id == paper_id))
     paper = paper_result.scalar_one_or_none()
 
@@ -103,10 +115,10 @@ async def find_similar_papers(
         return PaginationResponse(items=[], total=0, page=1, limit=k, pages=0)
 
     similar_result = await db.execute(select(Paper).where(Paper.id.in_(paper_ids)))
-    similar_papers = similar_result.scalars().all()
+    similar_papers = _preserve_order(similar_result.scalars().all(), paper_ids)
 
     return PaginationResponse(
-        items=list(similar_papers),
+        items=similar_papers,
         total=len(similar_papers),
         page=1,
         limit=k,

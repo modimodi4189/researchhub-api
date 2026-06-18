@@ -1,6 +1,6 @@
 import faiss
 import numpy as np
-import pickle
+import json
 from pathlib import Path
 
 
@@ -54,8 +54,8 @@ def save_index(
     meta_path: str,
 ) -> None:
     faiss.write_index(index, str(index_path))
-    with open(meta_path, "wb") as f:
-        pickle.dump(metadata, f)
+    with open(meta_path, "w", encoding="utf-8") as f:
+        json.dump(metadata, f)
 
 
 def load_index(index_path: str, meta_path: str):
@@ -69,6 +69,8 @@ def load_index(index_path: str, meta_path: str):
     if not index_p.exists() or not meta_p.exists():
         return None, {}
     index = faiss.read_index(str(index_p))
-    with open(meta_p, "rb") as f:
-        metadata = pickle.load(f)
+    with open(meta_p, "r", encoding="utf-8") as f:
+        raw = json.load(f)
+    # JSON serialises dict keys as strings; restore integer paper_id keys.
+    metadata = {int(k): v for k, v in raw.items()}
     return index, metadata

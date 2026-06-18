@@ -103,7 +103,13 @@ async def update_collection(
     if not collection:
         raise HTTPException(status_code=404, detail="Collection not found")
 
-    collection.name = collection_update.name
+    update_data = collection_update.model_dump(exclude_unset=True)
+    if not update_data:
+        return collection
+ 
+    for field, value in update_data.items():
+        setattr(collection, field, value)
+ 
     await db.commit()
     await db.refresh(collection)
 

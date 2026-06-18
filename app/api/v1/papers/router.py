@@ -1,6 +1,4 @@
 import asyncio
-from typing import Dict, Any
-
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
@@ -11,7 +9,7 @@ from app.db.database import get_db
 from app.db.models import Paper, User, Category
 from app.ml.classifier import classify_paper
 from app.ml.summarizer import summarize_text
-from app.schemas.schemas import PaperCreate, PaperUpdate, PaperResponse, PaginationResponse
+from app.schemas.schemas import PaperCreate, PaperUpdate, PaperResponse, PaperListResponse, PaginationResponse
 from app.api.deps import get_current_user
 from app.tasks.processing import process_paper, remove_paper_from_index_task
 
@@ -45,13 +43,13 @@ async def create_paper(
     return new_paper
 
 
-@router.get("", response_model=PaginationResponse[PaperResponse])
+@router.get("", response_model=PaginationResponse[PaperListResponse])
 async def get_papers(
     page: int = Query(1, ge=1, description="Page number"),
     limit: int = Query(10, ge=1, le=100, description="Items per page"),
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> PaginationResponse[PaperResponse]:
+) -> PaginationResponse[PaperListResponse]:
     offset = (page - 1) * limit
 
     count_result = await db.execute(
@@ -158,7 +156,7 @@ async def summarize_paper(
 
     if not paper:
         raise HTTPException(status_code=404, detail="Paper not found")
-    if not paper.is_public and paper.owner_id != current_user.id:
+    if paper.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized")
     if not paper.content:
         raise HTTPException(status_code=422, detail="Paper has no content to summarize")
@@ -185,7 +183,7 @@ async def classify_paper_endpoint(
 
     if not paper:
         raise HTTPException(status_code=404, detail="Paper not found")
-    if not paper.is_public and paper.owner_id != current_user.id:
+    if paper.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized")
 
     text_to_classify = paper.content or paper.abstract or paper.title

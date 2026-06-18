@@ -19,7 +19,7 @@ USER_INDEX_DIR = INDEX_DIR / "user_indices"
 USER_INDEX_DIR.mkdir(parents=True, exist_ok=True)
 
 PUBLIC_INDEX_PATH = INDEX_DIR / "public_index.faiss"
-PUBLIC_META_PATH = INDEX_DIR / "public_meta.pkl"
+PUBLIC_META_PATH = INDEX_DIR / "public_meta.json"
 
 
 # ---------------------------------------------------------------------------
@@ -31,7 +31,7 @@ def _user_index_path(user_id: int) -> Path:
 
 
 def _user_meta_path(user_id: int) -> Path:
-    return USER_INDEX_DIR / f"user_{user_id}_meta.pkl"
+    return USER_INDEX_DIR / f"user_{user_id}_meta.json"
 
 
 def _get_or_create_user_index(user_id: int):
