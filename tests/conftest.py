@@ -46,10 +46,10 @@ os.environ["SECRET_KEY"] = "test-secret-key-not-for-production"
 os.environ["DEBUG"] = "False"
 os.environ["REDIS_URL"] = "redis://localhost:6379/0"
 
-from app.main import app
-from app.db.models import Base
-from app.core.limiter import limiter
-from app.db.database import get_db
+from app.main import app  # noqa: E402
+from app.db.models import Base  # noqa: E402
+from app.core.limiter import limiter  # noqa: E402
+from app.db.database import get_db  # noqa: E402
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 

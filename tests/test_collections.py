@@ -1,7 +1,5 @@
 """Tests for /api/v1/collections/* endpoints."""
 
-import pytest
-
 from app.schemas.schemas import COLLECTION_NAME_MAX_LENGTH
 
 COLLECTION_PAYLOAD = {"name": "My Research"}
@@ -24,7 +22,7 @@ async def test_create_collection(auth_client):
 
 async def test_create_collection_requires_auth(client):
     r = await client.post("/api/v1/collections", json=COLLECTION_PAYLOAD)
-    assert r.status_code == 403
+    assert r.status_code == 401
 
 
 async def test_create_collection_rejects_whitespace_name(auth_client):

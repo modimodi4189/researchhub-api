@@ -237,7 +237,7 @@ async def test_refresh_is_rate_limited(client, enable_rate_limiter):
 
 async def test_protected_endpoint_no_token(client):
     r = await client.get("/api/v1/papers")
-    assert r.status_code == 403
+    assert r.status_code == 401
 
 
 async def test_protected_endpoint_malformed_token(client):

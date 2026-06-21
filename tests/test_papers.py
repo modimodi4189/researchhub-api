@@ -37,7 +37,7 @@ async def test_create_paper_success(auth_client):
 
 async def test_create_paper_requires_auth(client):
     r = await client.post("/api/v1/papers", json=PAPER_PAYLOAD)
-    assert r.status_code == 403
+    assert r.status_code == 401
 
 
 async def test_create_paper_missing_title(auth_client):

@@ -6,9 +6,6 @@ these tests verify the HTTP layer, DB lookup, result shaping, and ordering —
 not the vector search itself.
 """
 
-import pytest
-
-
 # ---------------------------------------------------------------------------
 # Search my papers
 # ---------------------------------------------------------------------------
@@ -25,7 +22,7 @@ async def test_search_my_returns_empty_when_no_index_results(auth_client, create
 
 async def test_search_my_requires_auth(client):
     r = await client.get("/api/v1/search/my?q=test")
-    assert r.status_code == 403
+    assert r.status_code == 401
 
 
 async def test_search_my_requires_query(auth_client):
@@ -165,7 +162,7 @@ async def test_search_public_filters_stale_private_index_ids(auth_client, monkey
 
 async def test_search_public_requires_auth(client):
     r = await client.get("/api/v1/search/public?q=test")
-    assert r.status_code == 403
+    assert r.status_code == 401
 
 
 # ---------------------------------------------------------------------------
@@ -234,4 +231,4 @@ async def test_similar_filters_private_stale_public_hits(auth_client, client, cr
 async def test_similar_requires_auth(client, auth_client, created_paper):
     client.headers.pop("Authorization", None)
     r = await client.get(f"/api/v1/search/similar/{created_paper['id']}")
-    assert r.status_code == 403
+    assert r.status_code == 401
