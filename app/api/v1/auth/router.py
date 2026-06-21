@@ -1,21 +1,47 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, status
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from uuid import uuid4
 
-from app.db.database import get_db
-from app.db.models import User
-from app.schemas.schemas import UserCreate, UserLogin, UserResponse, Token, RefreshRequest
+from fastapi import APIRouter, Depends, HTTPException, Request, status
+from redis.exceptions import RedisError
+from sqlalchemy import select
+from sqlalchemy.ext.asyncio import AsyncSession
+
+from app.core.limiter import limiter
+from app.core.logging import logger
+from app.core.refresh_tokens import refresh_token_store
 from app.core.security import (
-    get_password_hash,
-    verify_password,
     create_access_token,
     create_refresh_token,
     decode_token,
+    decode_token_payload,
+    get_password_hash,
+    verify_password,
 )
-from app.core.logging import logger
-from app.core.limiter import limiter
+from app.db.database import get_db
+from app.db.models import User
+from app.schemas.schemas import RefreshRequest, Token, UserCreate, UserLogin, UserResponse
 
 router = APIRouter(prefix="/auth", tags=["Authentication"])
+
+
+async def issue_token_pair(user_id: int) -> Token:
+    payload = {"sub": str(user_id)}
+    refresh_jti = str(uuid4())
+    refresh_token = create_refresh_token(payload, jti=refresh_jti)
+
+    try:
+        await refresh_token_store.store(refresh_jti, user_id)
+    except RedisError:
+        logger.exception(f"Unable to store refresh token for user {user_id}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Unable to issue refresh token",
+        )
+
+    return Token(
+        access_token=create_access_token(payload),
+        refresh_token=refresh_token,
+        token_type="bearer",
+    )
 
 
 @router.post("/register", response_model=UserResponse, status_code=status.HTTP_201_CREATED)
@@ -32,7 +58,7 @@ async def register(
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="Email already registered",
         )
- 
+
     new_user = User(
         email=user.email,
         hashed_password=get_password_hash(user.password),
@@ -40,7 +66,7 @@ async def register(
     db.add(new_user)
     await db.commit()
     await db.refresh(new_user)
- 
+
     logger.info(f"New user registered: {new_user.id}")
     return new_user
 
@@ -54,44 +80,54 @@ async def login(
 ) -> Token:
     result = await db.execute(select(User).where(User.email == user.email))
     db_user = result.scalar_one_or_none()
- 
+
     if not db_user or not verify_password(user.password, db_user.hashed_password):
         logger.warning(f"Failed login attempt for email: {user.email[:3]}***")
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Incorrect email or password",
         )
- 
-    payload = {"sub": str(db_user.id)}
+
     logger.info(f"User {db_user.id} logged in successfully")
- 
-    return Token(
-        access_token=create_access_token(payload),
-        refresh_token=create_refresh_token(payload),
-        token_type="bearer",
-    )
+    return await issue_token_pair(db_user.id)
 
 
 @router.post("/refresh", response_model=Token)
 @limiter.limit("20/minute")
 async def refresh_token(request: Request, body: RefreshRequest) -> Token:
     """
-    Accept a valid (non-expired) refresh token and return a new access/refresh
-    token pair (token rotation). Access tokens are rejected here — the token
-    type claim is validated inside decode_token.
+    Accept a valid refresh token and return a new access/refresh token pair.
+    The old refresh token is invalidated in Redis, so replaying it after a
+    successful refresh is rejected.
     """
+    payload = decode_token_payload(body.refresh_token, token_type="refresh")
+    if not payload or not payload.get("jti"):
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired refresh token",
+        )
+
     user_id = decode_token(body.refresh_token, token_type="refresh")
     if not user_id:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired refresh token",
         )
- 
-    payload = {"sub": str(user_id)}
+
+    try:
+        token_is_active = await refresh_token_store.consume(payload["jti"], user_id)
+    except RedisError:
+        logger.exception(f"Unable to verify refresh token for user {user_id}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Unable to verify refresh token",
+        )
+
+    if not token_is_active:
+        raise HTTPException(
+            status_code=status.HTTP_401_UNAUTHORIZED,
+            detail="Invalid or expired refresh token",
+        )
+
     logger.info(f"Token rotated for user {user_id}")
- 
-    return Token(
-        access_token=create_access_token(payload),
-        refresh_token=create_refresh_token(payload),
-        token_type="bearer",
-    )
+    return await issue_token_pair(user_id)

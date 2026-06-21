@@ -30,9 +30,13 @@ Path("logs").mkdir(exist_ok=True)
 # Override settings BEFORE any app module is imported so pydantic-settings
 # picks up the test values.
 # ---------------------------------------------------------------------------
+DEFAULT_DB_URL = os.getenv(
+    "DATABASE_URL",
+    "postgresql+asyncpg://postgres:postgres@postgres:5432/researchhub",
+)
 TEST_DB_URL = os.getenv(
     "TEST_DATABASE_URL",
-    "postgresql+asyncpg://postgres:postgres@postgres:5432/test_researchhub",
+    f"{DEFAULT_DB_URL.rsplit('/', 1)[0]}/test_researchhub",
 )
 os.environ["DATABASE_URL"] = TEST_DB_URL
 os.environ["SECRET_KEY"] = "test-secret-key-not-for-production"
@@ -43,6 +47,17 @@ from app.main import app
 from app.db.models import Base
 from app.core.limiter import limiter
 from app.db.database import get_db
+
+
+class _InMemoryRefreshTokenStore:
+    def __init__(self):
+        self.tokens = {}
+
+    async def store(self, jti: str, user_id: int) -> None:
+        self.tokens[jti] = str(user_id)
+
+    async def consume(self, jti: str, user_id: int) -> bool:
+        return self.tokens.pop(jti, None) == str(user_id)
 
 # ---------------------------------------------------------------------------
 # Rate limiting — disabled for the entire test session.
@@ -122,6 +137,16 @@ def _mock_celery(monkeypatch):
     monkeypatch.setattr("app.tasks.processing.remove_paper_from_index_task.delay", mock)
     monkeypatch.setattr("app.tasks.processing.update_paper_index_task.delay", mock)
     return mock
+
+
+# ---------------------------------------------------------------------------
+# Mock refresh-token Redis store so auth tests do not need Redis.
+# ---------------------------------------------------------------------------
+@pytest.fixture(autouse=True)
+def _mock_refresh_token_store(monkeypatch):
+    store = _InMemoryRefreshTokenStore()
+    monkeypatch.setattr("app.api.v1.auth.router.refresh_token_store", store)
+    return store
 
 
 # ---------------------------------------------------------------------------

@@ -5,7 +5,7 @@ An AI-powered research paper organization system built with FastAPI. Features se
 ## Features
 
 - **RESTful API** — Full CRUD for research papers and collections
-- **JWT Authentication** — Secure registration, login, and token rotation
+- **JWT Authentication** — Secure registration, login, and Redis-backed refresh-token rotation
 - **Semantic Search** — Find papers by meaning using FAISS vector search + sentence-transformers
 - **Auto-Summarization** — distilbart-cnn-12-6 generates concise paper summaries
 - **Zero-Shot Classification** — Categorize papers without labelled training data (BART-large-MNLI)
@@ -23,7 +23,7 @@ An AI-powered research paper organization system built with FastAPI. Features se
 | ORM | SQLAlchemy 2.0 (async) |
 | Cache / Queue | Redis |
 | Task Queue | Celery |
-| Auth | JWT (python-jose) with access + refresh token rotation |
+| Auth | JWT (python-jose) with access tokens and Redis-backed refresh-token rotation |
 | Embeddings | sentence-transformers (all-MiniLM-L6-v2) |
 | Vector Store | FAISS (IndexIDMap) |
 | Summarization | sshleifer/distilbart-cnn-12-6 |
@@ -39,7 +39,7 @@ An AI-powered research paper organization system built with FastAPI. Features se
 ### Prerequisites
 
 - Docker & Docker Compose
-- A generated secret key (see below)
+- Generated local values for `SECRET_KEY` and `POSTGRES_PASSWORD` (see below)
 
 ### Setup
 
@@ -49,13 +49,19 @@ An AI-powered research paper organization system built with FastAPI. Features se
    cd researchhub-api
    ```
 
-2. Create your environment file and set a real secret key:
+2. Create your environment file and set local secrets:
    ```bash
    cp .env.example .env
-   # Generate a secure key:
+   # Generate SECRET_KEY:
    python -c "import secrets; print(secrets.token_hex(32))"
-   # Paste the output as SECRET_KEY in .env
+   # Generate POSTGRES_PASSWORD:
+   python -c "import secrets; print(secrets.token_urlsafe(24))"
+   # Paste the outputs into .env
    ```
+
+   `.env.example` is for local development only. `SECRET_KEY` and
+   `POSTGRES_PASSWORD` are intentionally blank, and Docker Compose will refuse
+   to start until both are set.
 
 3. Start the services:
    ```bash
@@ -65,6 +71,12 @@ An AI-powered research paper organization system built with FastAPI. Features se
    The `migrate` service runs `alembic upgrade head` automatically before the API starts.
 
 The API will be available at `http://localhost:8000`.
+
+Only the API port is published to the host by default. Postgres and Redis stay
+on the private Docker Compose network; use `docker-compose exec postgres psql -U
+postgres -d researchhub` or `docker-compose exec redis redis-cli` for local
+inspection. Add temporary host port mappings only when a local GUI or debugger
+needs direct database/cache access.
 
 ### API Documentation
 
@@ -79,7 +91,7 @@ Interactive docs available at:
 |--------|----------|-------------|
 | POST | `/api/v1/auth/register` | Register new user |
 | POST | `/api/v1/auth/login` | Login and receive token pair |
-| POST | `/api/v1/auth/refresh` | Rotate refresh token |
+| POST | `/api/v1/auth/refresh` | Rotate refresh token and invalidate the previous one |
 
 ### Papers
 | Method | Endpoint | Description |
@@ -117,7 +129,8 @@ Interactive docs available at:
 | `SECRET_KEY` | JWT signing key — generate with `secrets.token_hex(32)` | **Yes** |
 | `DATABASE_URL` | PostgreSQL async connection string | **Yes** |
 | `POSTGRES_PASSWORD` | Postgres password (used by docker-compose) | **Yes** |
-| `REDIS_URL` | Redis connection string | **Yes** |
+| `REDIS_URL` | Redis connection string for Celery and refresh-token invalidation | **Yes** |
+| `CORS_ORIGINS` | JSON list of allowed browser origins. Empty means no CORS origins; `*` is rejected unless `DEBUG=True`. | Default: local frontend/API origins |
 | `ALGORITHM` | JWT algorithm | Default: `HS256` |
 | `ACCESS_TOKEN_EXPIRE_MINUTES` | Access token TTL | Default: `30` |
 | `REFRESH_TOKEN_EXPIRE_DAYS` | Refresh token TTL | Default: `7` |
@@ -130,20 +143,19 @@ Tests run inside Docker against a dedicated `test_researchhub` database. ML infe
 
 ```bash
 # Create the test database (one-time setup)
-docker exec -it researchhub-api-postgres-1 psql -U postgres -c "CREATE DATABASE test_researchhub;"
+docker-compose exec postgres psql -U postgres -c "CREATE DATABASE test_researchhub;"
 
 # Run Alembic migrations against the test database
-docker exec -e DATABASE_URL=postgresql+asyncpg://postgres:postgres@postgres:5432/test_researchhub \
-  -it researchhub-api-api-1 alembic upgrade head
+docker-compose exec api sh -lc 'DATABASE_URL="${DATABASE_URL%/*}/test_researchhub" alembic upgrade head'
 
 # Run the test suite
-docker exec -it researchhub-api-api-1 python -m pytest --tb=short
+docker-compose exec api python -m pytest --tb=short
 ```
 
 ## Known Limitations
 
 - **FAISS is single-machine** — horizontal scaling would require switching to pgvector, Pinecone, or Weaviate.
-- **No token revocation** — refresh tokens are stateless JWTs; invalidation would require a Redis-backed blocklist.
+- **Access token revocation** — access tokens remain valid until their short TTL expires; refresh tokens are invalidated on use via Redis.
 - **FAISS ↔ DB consistency** — if the Celery worker is down during a deletion, the paper is removed from Postgres but its vector remains in the index until the next indexing run. Search returns no results for stale IDs (DB lookup filters them silently).
 - **PDF upload** — `pdf_extractor.py` is implemented but not yet wired to a route.
 
@@ -154,7 +166,7 @@ researchhub-api/
 ├── app/
 │   ├── api/
 │   │   └── v1/
-│   │       ├── auth/          # Registration, login, token rotation
+│   │       ├── auth/          # Registration, login, refresh-token rotation
 │   │       ├── papers/        # Paper CRUD + summarize/classify
 │   │       ├── collections/   # Collection management
 │   │       └── search/        # Semantic search endpoints
@@ -192,7 +204,7 @@ MIT
 
 Built as a portfolio project demonstrating:
 - Async FastAPI with SQLAlchemy 2.0
-- JWT authentication with token rotation
+- JWT authentication with Redis-backed refresh-token rotation
 - FAISS vector search with correct IndexIDMap usage
 - ML model integration (summarization, zero-shot classification)
 - Celery + Redis for background task processing

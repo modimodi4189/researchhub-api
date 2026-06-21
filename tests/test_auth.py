@@ -177,6 +177,24 @@ async def test_refresh_with_refresh_token_succeeds(client):
     assert "refresh_token" in data
 
 
+async def test_refresh_rejects_reused_refresh_token(client):
+    await client.post("/api/v1/auth/register", json=CREDS)
+    login_r = await client.post("/api/v1/auth/login", json=CREDS)
+    old_refresh_token = login_r.json()["refresh_token"]
+
+    first_refresh = await client.post(
+        "/api/v1/auth/refresh",
+        json={"refresh_token": old_refresh_token},
+    )
+    assert first_refresh.status_code == 200
+
+    reused_refresh = await client.post(
+        "/api/v1/auth/refresh",
+        json={"refresh_token": old_refresh_token},
+    )
+    assert reused_refresh.status_code == 401
+
+
 async def test_refresh_with_access_token_rejected(client):
     """An access token must not be accepted by the refresh endpoint."""
     await client.post("/api/v1/auth/register", json=CREDS)
@@ -204,6 +222,7 @@ async def test_refresh_is_rate_limited(client, enable_rate_limiter):
                 json={"refresh_token": refresh_token},
             )
             assert r.status_code == 200
+            refresh_token = r.json()["refresh_token"]
 
         r = await client.post(
             "/api/v1/auth/refresh",
