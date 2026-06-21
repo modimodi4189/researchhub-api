@@ -2,7 +2,7 @@ import asyncio
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select
+from sqlalchemy import or_, select
 
 from app.db.database import get_db
 from app.db.models import Paper, User
@@ -43,7 +43,12 @@ async def search_my_papers(
     if not paper_ids:
         return PaginationResponse(items=[], total=0, page=1, limit=k, pages=0)
 
-    result = await db.execute(select(Paper).where(Paper.id.in_(paper_ids)))
+    result = await db.execute(
+        select(Paper).where(
+            Paper.id.in_(paper_ids),
+            Paper.owner_id == current_user.id,
+        )
+    )
     papers = _preserve_order(result.scalars().all(), paper_ids)
 
     return PaginationResponse(
@@ -51,7 +56,7 @@ async def search_my_papers(
         total=len(papers),
         page=1,
         limit=k,
-        pages=1,
+        pages=1 if papers else 0,
     )
 
 
@@ -68,7 +73,12 @@ async def search_public_papers(
     if not paper_ids:
         return PaginationResponse(items=[], total=0, page=1, limit=k, pages=0)
 
-    result = await db.execute(select(Paper).where(Paper.id.in_(paper_ids)))
+    result = await db.execute(
+        select(Paper).where(
+            Paper.id.in_(paper_ids),
+            Paper.is_public.is_(True),
+        )
+    )
     papers = _preserve_order(result.scalars().all(), paper_ids)
 
     return PaginationResponse(
@@ -76,7 +86,7 @@ async def search_public_papers(
         total=len(papers),
         page=1,
         limit=k,
-        pages=1,
+        pages=1 if papers else 0,
     )
 
 
@@ -114,7 +124,12 @@ async def find_similar_papers(
     if not paper_ids:
         return PaginationResponse(items=[], total=0, page=1, limit=k, pages=0)
 
-    similar_result = await db.execute(select(Paper).where(Paper.id.in_(paper_ids)))
+    similar_result = await db.execute(
+        select(Paper).where(
+            Paper.id.in_(paper_ids),
+            or_(Paper.is_public.is_(True), Paper.owner_id == current_user.id),
+        )
+    )
     similar_papers = _preserve_order(similar_result.scalars().all(), paper_ids)
 
     return PaginationResponse(
@@ -122,5 +137,5 @@ async def find_similar_papers(
         total=len(similar_papers),
         page=1,
         limit=k,
-        pages=1,
+        pages=1 if similar_papers else 0,
     )

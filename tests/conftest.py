@@ -120,6 +120,7 @@ def _mock_celery(monkeypatch):
     mock = MagicMock()
     monkeypatch.setattr("app.tasks.processing.process_paper.delay", mock)
     monkeypatch.setattr("app.tasks.processing.remove_paper_from_index_task.delay", mock)
+    monkeypatch.setattr("app.tasks.processing.update_paper_index_task.delay", mock)
     return mock
 
 
@@ -141,7 +142,15 @@ def _mock_ml(monkeypatch):
         lambda user_id, query, k=5: ([], []),
     )
     monkeypatch.setattr(
+        "app.api.v1.search.router.search_user_papers_idx",
+        lambda user_id, query, k=5: ([], []),
+    )
+    monkeypatch.setattr(
         "app.ml.index_manager.search_public_papers",
+        lambda query, k=5: ([], []),
+    )
+    monkeypatch.setattr(
+        "app.api.v1.search.router.search_public_papers_idx",
         lambda query, k=5: ([], []),
     )
 

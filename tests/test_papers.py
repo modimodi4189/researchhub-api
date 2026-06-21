@@ -1,5 +1,7 @@
 """Tests for /api/v1/papers/* endpoints."""
 
+from unittest.mock import MagicMock
+
 import pytest
 
 PAPER_PAYLOAD = {
@@ -121,6 +123,40 @@ async def test_update_paper(auth_client, created_paper):
     assert data["title"] == "Updated Title"
     assert data["is_public"] is False
     assert data["updated_at"] is not None
+
+
+async def test_update_public_to_private_dispatches_index_sync(auth_client, monkeypatch):
+    client, _ = auth_client
+    update_index_mock = MagicMock()
+    monkeypatch.setattr(
+        "app.api.v1.papers.router.update_paper_index_task.delay",
+        update_index_mock,
+    )
+
+    create_response = await client.post(
+        "/api/v1/papers",
+        json={
+            "title": "Fallback indexed title",
+            "abstract": "Fallback indexed abstract",
+            "is_public": True,
+        },
+    )
+    assert create_response.status_code == 201
+    paper = create_response.json()
+
+    r = await client.patch(
+        f"/api/v1/papers/{paper['id']}",
+        json={"is_public": False},
+    )
+
+    assert r.status_code == 200
+    update_index_mock.assert_called_once_with(
+        paper["id"],
+        "Fallback indexed abstract",
+        paper["owner_id"],
+        False,
+        paper["owner_id"],
+    )
 
 
 async def test_update_paper_not_owner(client, created_paper):

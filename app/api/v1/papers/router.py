@@ -11,9 +11,17 @@ from app.ml.classifier import classify_paper
 from app.ml.summarizer import summarize_text
 from app.schemas.schemas import PaperCreate, PaperUpdate, PaperResponse, PaperListResponse, PaginationResponse
 from app.api.deps import get_current_user
-from app.tasks.processing import process_paper, remove_paper_from_index_task
+from app.tasks.processing import (
+    process_paper,
+    remove_paper_from_index_task,
+    update_paper_index_task,
+)
 
 router = APIRouter(prefix="/papers", tags=["Papers"])
+
+
+def _paper_index_text(paper: Paper) -> str | None:
+    return paper.content or paper.abstract or paper.title
 
 
 @router.post("", response_model=PaperResponse, status_code=status.HTTP_201_CREATED)
@@ -37,8 +45,9 @@ async def create_paper(
     logger.info(f"User {current_user.id} created paper {new_paper.id}: {new_paper.title}")
 
     # Dispatch to Celery — indexing runs in the background worker, not the API process.
-    if new_paper.content:
-        process_paper.delay(new_paper.id, new_paper.content, current_user.id, new_paper.is_public)
+    index_text = _paper_index_text(new_paper)
+    if index_text:
+        process_paper.delay(new_paper.id, index_text, current_user.id, new_paper.is_public)
 
     return new_paper
 
@@ -107,12 +116,31 @@ async def update_paper(
     if paper.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized to update this paper")
 
+    old_index_text = _paper_index_text(paper)
+    old_is_public = paper.is_public
+    old_owner_id = paper.owner_id
+
     update_data = paper_update.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(paper, field, value)
 
     await db.commit()
     await db.refresh(paper)
+
+    new_index_text = _paper_index_text(paper)
+    should_update_index = (
+        old_index_text != new_index_text
+        or old_is_public != paper.is_public
+        or old_owner_id != paper.owner_id
+    )
+    if should_update_index:
+        update_paper_index_task.delay(
+            paper.id,
+            new_index_text,
+            paper.owner_id,
+            paper.is_public,
+            old_owner_id,
+        )
 
     logger.info(f"User {current_user.id} updated paper {paper_id}")
     return paper
@@ -132,14 +160,14 @@ async def delete_paper(
     if paper.owner_id != current_user.id:
         raise HTTPException(status_code=403, detail="Not authorized to delete this paper")
 
-    had_content = bool(paper.content)
+    had_index_text = bool(_paper_index_text(paper))
     was_public = paper.is_public
 
     await db.delete(paper)
     await db.commit()
 
     # Dispatch index cleanup to Celery — keeps all FAISS writes in one process.
-    if had_content:
+    if had_index_text:
         remove_paper_from_index_task.delay(paper_id, current_user.id, was_public)
 
     logger.info(f"User {current_user.id} deleted paper {paper_id}")

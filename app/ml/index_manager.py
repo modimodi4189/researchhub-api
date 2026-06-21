@@ -69,11 +69,45 @@ def _filter_results(distances, paper_ids):
     return list(dist_out), list(ids_out)
 
 
+def _remove_paper_from_loaded_index(index, metadata: dict, paper_id: int) -> bool:
+    before_count = index.ntotal
+    remove_from_index(index, paper_id)
+    removed_vector = index.ntotal != before_count
+    removed_meta = metadata.pop(paper_id, None) is not None
+    return removed_vector or removed_meta
+
+
 # ---------------------------------------------------------------------------
 # Public API
 # ---------------------------------------------------------------------------
 
 def add_paper_to_index(paper_id: int, text: str, owner_id: int, is_public: bool) -> None:
+    update_paper_in_index(paper_id, text, owner_id, is_public)
+
+
+def update_paper_in_index(
+    paper_id: int,
+    text: str | None,
+    owner_id: int,
+    is_public: bool,
+    previous_owner_id: int | None = None,
+) -> None:
+    owner_ids = {owner_id}
+    if previous_owner_id is not None:
+        owner_ids.add(previous_owner_id)
+
+    for index_owner_id in owner_ids:
+        user_index, user_meta = _get_or_create_user_index(index_owner_id)
+        if _remove_paper_from_loaded_index(user_index, user_meta, paper_id):
+            _save_user_index(index_owner_id, user_index, user_meta)
+
+    public_index, public_meta = _get_public_index()
+    if _remove_paper_from_loaded_index(public_index, public_meta, paper_id):
+        _save_public_index(public_index, public_meta)
+
+    if not text:
+        return
+
     embedding = generate_embedding(text)
 
     user_index, user_meta = _get_or_create_user_index(owner_id)
@@ -90,17 +124,12 @@ def add_paper_to_index(paper_id: int, text: str, owner_id: int, is_public: bool)
 
 def remove_paper_from_index(paper_id: int, owner_id: int, is_public: bool) -> None:
     user_index, user_meta = _get_or_create_user_index(owner_id)
-    if paper_id in user_meta:
-        remove_from_index(user_index, paper_id)
-        del user_meta[paper_id]
+    if _remove_paper_from_loaded_index(user_index, user_meta, paper_id):
         _save_user_index(owner_id, user_index, user_meta)
 
-    if is_public:
-        public_index, public_meta = _get_public_index()
-        if paper_id in public_meta:
-            remove_from_index(public_index, paper_id)
-            del public_meta[paper_id]
-            _save_public_index(public_index, public_meta)
+    public_index, public_meta = _get_public_index()
+    if _remove_paper_from_loaded_index(public_index, public_meta, paper_id):
+        _save_public_index(public_index, public_meta)
 
 
 def search_user_papers(user_id: int, query: str, k: int = 5):

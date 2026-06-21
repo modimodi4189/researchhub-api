@@ -84,6 +84,36 @@ async def test_search_my_preserves_relevance_order(auth_client, monkeypatch):
     assert ids == [id_b, id_a], "Results must preserve FAISS relevance order"
 
 
+async def test_search_my_filters_index_hits_to_current_owner(auth_client, client, monkeypatch):
+    client, tokens = auth_client
+    owned = await client.post(
+        "/api/v1/papers",
+        json={"title": "Owned Paper", "abstract": "Owned abstract", "is_public": True},
+    )
+    owned_id = owned.json()["id"]
+
+    other_creds = {"email": "search-owner@example.com", "password": "ownerpass123"}
+    await client.post("/api/v1/auth/register", json=other_creds)
+    login = await client.post("/api/v1/auth/login", json=other_creds)
+    client.headers["Authorization"] = f"Bearer {login.json()['access_token']}"
+    other = await client.post(
+        "/api/v1/papers",
+        json={"title": "Other Paper", "abstract": "Other abstract", "is_public": True},
+    )
+    other_id = other.json()["id"]
+
+    client.headers["Authorization"] = f"Bearer {tokens['access_token']}"
+    monkeypatch.setattr(
+        "app.api.v1.search.router.search_user_papers_idx",
+        lambda user_id, query, k: ([], [other_id, owned_id]),
+    )
+
+    r = await client.get("/api/v1/search/my?q=test&k=5")
+
+    assert r.status_code == 200
+    assert [item["id"] for item in r.json()["items"]] == [owned_id]
+
+
 # ---------------------------------------------------------------------------
 # Search public papers
 # ---------------------------------------------------------------------------
@@ -107,6 +137,30 @@ async def test_search_public_returns_papers_when_index_hits(auth_client, created
     r = await client.get("/api/v1/search/public?q=neural+networks&k=5")
     assert r.status_code == 200
     assert r.json()["items"][0]["id"] == paper_id
+
+
+async def test_search_public_filters_stale_private_index_ids(auth_client, monkeypatch):
+    client, _ = auth_client
+    public_response = await client.post(
+        "/api/v1/papers",
+        json={"title": "Public Paper", "abstract": "Public abstract", "is_public": True},
+    )
+    private_response = await client.post(
+        "/api/v1/papers",
+        json={"title": "Private Paper", "abstract": "Private abstract", "is_public": False},
+    )
+    public_id = public_response.json()["id"]
+    private_id = private_response.json()["id"]
+
+    monkeypatch.setattr(
+        "app.api.v1.search.router.search_public_papers_idx",
+        lambda query, k: ([], [private_id, public_id]),
+    )
+
+    r = await client.get("/api/v1/search/public?q=paper&k=5")
+
+    assert r.status_code == 200
+    assert [item["id"] for item in r.json()["items"]] == [public_id]
 
 
 async def test_search_public_requires_auth(client):
@@ -149,6 +203,32 @@ async def test_similar_excludes_source_paper(auth_client, created_paper, monkeyp
     assert r.status_code == 200
     ids = [p["id"] for p in r.json()["items"]]
     assert paper_id not in ids
+
+
+async def test_similar_filters_private_stale_public_hits(auth_client, client, created_paper, monkeypatch):
+    client, tokens = auth_client
+    source_id = created_paper["id"]
+
+    other_creds = {"email": "similar-private@example.com", "password": "similarpass123"}
+    await client.post("/api/v1/auth/register", json=other_creds)
+    login = await client.post("/api/v1/auth/login", json=other_creds)
+    client.headers["Authorization"] = f"Bearer {login.json()['access_token']}"
+    private_response = await client.post(
+        "/api/v1/papers",
+        json={"title": "Private Similar", "abstract": "Private abstract", "is_public": False},
+    )
+    private_id = private_response.json()["id"]
+
+    client.headers["Authorization"] = f"Bearer {tokens['access_token']}"
+    monkeypatch.setattr(
+        "app.api.v1.search.router.search_public_papers_idx",
+        lambda query, k: ([], [source_id, private_id]),
+    )
+
+    r = await client.get(f"/api/v1/search/similar/{source_id}?k=3")
+
+    assert r.status_code == 200
+    assert r.json()["items"] == []
 
 
 async def test_similar_requires_auth(client, auth_client, created_paper):
