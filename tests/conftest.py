@@ -17,6 +17,9 @@ from unittest.mock import MagicMock
 
 import pytest
 import pytest_asyncio
+from alembic import command
+from alembic.config import Config
+from sqlalchemy import text
 from sqlalchemy.pool import NullPool
 from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
 
@@ -47,6 +50,8 @@ from app.main import app
 from app.db.models import Base
 from app.core.limiter import limiter
 from app.db.database import get_db
+
+PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
 
 class _InMemoryRefreshTokenStore:
@@ -103,15 +108,27 @@ app.dependency_overrides[get_db] = _override_get_db
 
 
 # ---------------------------------------------------------------------------
-# Database lifecycle — create all tables once per session, drop after.
+# Database lifecycle - run Alembic migrations against a clean test schema.
 # ---------------------------------------------------------------------------
+def _run_alembic_upgrade(connection) -> None:
+    alembic_cfg = Config(str(PROJECT_ROOT / "alembic.ini"))
+    alembic_cfg.attributes["connection"] = connection
+    command.upgrade(alembic_cfg, "head")
+
+
+async def _reset_public_schema(connection) -> None:
+    await connection.execute(text("DROP SCHEMA IF EXISTS public CASCADE"))
+    await connection.execute(text("CREATE SCHEMA public"))
+
+
 @pytest_asyncio.fixture(scope="session", autouse=True)
 async def _db_lifecycle():
     async with _test_engine.begin() as conn:
-        await conn.run_sync(Base.metadata.create_all)
+        await _reset_public_schema(conn)
+        await conn.run_sync(_run_alembic_upgrade)
     yield
     async with _test_engine.begin() as conn:
-        await conn.run_sync(Base.metadata.drop_all)
+        await _reset_public_schema(conn)
 
 
 # ---------------------------------------------------------------------------
@@ -163,16 +180,8 @@ def _mock_ml(monkeypatch):
         lambda text: {"category": "machine learning", "confidence": 0.95},
     )
     monkeypatch.setattr(
-        "app.ml.index_manager.search_user_papers",
-        lambda user_id, query, k=5: ([], []),
-    )
-    monkeypatch.setattr(
         "app.api.v1.search.router.search_user_papers_idx",
         lambda user_id, query, k=5: ([], []),
-    )
-    monkeypatch.setattr(
-        "app.ml.index_manager.search_public_papers",
-        lambda query, k=5: ([], []),
     )
     monkeypatch.setattr(
         "app.api.v1.search.router.search_public_papers_idx",

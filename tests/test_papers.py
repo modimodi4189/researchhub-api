@@ -124,23 +124,23 @@ async def test_get_paper_not_found(auth_client):
     assert r.status_code == 404
 
 
-async def test_get_private_paper_by_other_user(client, created_paper):
+async def test_get_private_paper_by_other_user(auth_client):
     """A private paper must not be visible to a different user."""
-    # Register a second user and create a private paper as them
+    client, _ = auth_client
+    private = await client.post(
+        "/api/v1/papers",
+        json={**PAPER_PAYLOAD, "is_public": False},
+    )
+    owner_private_id = private.json()["id"]
+
+    # Register a second user and try to read the owner's private paper.
     creds2 = {"email": "other@example.com", "password": "otherpass123"}
     await client.post("/api/v1/auth/register", json=creds2)
     r = await client.post("/api/v1/auth/login", json=creds2)
     client.headers["Authorization"] = f"Bearer {r.json()['access_token']}"
 
-    private = await client.post(
-        "/api/v1/papers",
-        json={**PAPER_PAYLOAD, "is_public": False},
-    )
-    private_id = private.json()["id"]
-
-    # Remove auth header — simulates a different (unauthenticated) user
-    client.headers.pop("Authorization")
-    r2 = await client.get(f"/api/v1/papers/{private_id}")
+    assert "Authorization" in client.headers
+    r2 = await client.get(f"/api/v1/papers/{owner_private_id}")
     assert r2.status_code == 403
 
 
