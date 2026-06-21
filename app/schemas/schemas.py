@@ -70,29 +70,8 @@ class Token(BaseModel):
     )
 
 
-class TokenData(BaseModel):
-    user_id: Optional[int] = None
-
-
 class RefreshRequest(BaseModel):
     refresh_token: str
-
-
-# ---------------------------------------------------------------------------
-# Categories
-# ---------------------------------------------------------------------------
-
-class CategoryCreate(BaseModel):
-    name: str
-    description: Optional[str] = None
-
-
-class CategoryResponse(BaseModel):
-    id: int
-    name: str
-    description: Optional[str]
-
-    model_config = ConfigDict(from_attributes=True)
 
 
 # ---------------------------------------------------------------------------
@@ -163,8 +142,10 @@ class PaperResponse(BaseModel):
 
     model_config = ConfigDict(from_attributes=True)
 
+
 class PaperListResponse(BaseModel):
     """Lightweight paper representation for list endpoints. Excludes full content."""
+
     id: int
     title: str
     abstract: Optional[str]
@@ -174,7 +155,7 @@ class PaperListResponse(BaseModel):
     updated_at: Optional[datetime]
     owner_id: int
     category_id: Optional[int]
- 
+
     model_config = ConfigDict(from_attributes=True)
 
 

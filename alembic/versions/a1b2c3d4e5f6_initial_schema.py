@@ -50,7 +50,6 @@ def upgrade() -> None:
         sa.Column("abstract", sa.Text(), nullable=True),
         sa.Column("content", sa.Text(), nullable=True),
         sa.Column("summary", sa.Text(), nullable=True),
-        sa.Column("file_path", sa.String(), nullable=True),
         sa.Column("is_public", sa.Boolean(), nullable=True),
         sa.Column(
             "created_at",

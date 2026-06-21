@@ -42,7 +42,3 @@ def classify_paper(text: str, candidate_labels: list = None) -> dict:
         "category": result["labels"][0],
         "confidence": result["scores"][0],
     }
-
-
-def get_default_categories() -> list:
-    return DEFAULT_CATEGORIES

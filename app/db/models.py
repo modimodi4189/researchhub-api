@@ -44,7 +44,6 @@ class Paper(Base):
     abstract = Column(Text, nullable=True)
     content = Column(Text, nullable=True)
     summary = Column(Text, nullable=True)
-    file_path = Column(String, nullable=True)
     is_public = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
