@@ -1,8 +1,13 @@
 from datetime import datetime
 from typing import List, Optional, TypeVar, Generic
-from pydantic import BaseModel, EmailStr, ConfigDict, Field
+from pydantic import BaseModel, EmailStr, ConfigDict, Field, field_validator
 
 T = TypeVar("T")
+
+PAPER_TITLE_MAX_LENGTH = 255
+PAPER_ABSTRACT_MAX_LENGTH = 10_000
+PAPER_CONTENT_MAX_LENGTH = 1_000_000
+COLLECTION_NAME_MAX_LENGTH = 255
 
 
 class PaginationResponse(BaseModel, Generic[T]):
@@ -95,11 +100,18 @@ class CategoryResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 class PaperCreate(BaseModel):
-    title: str = Field(...,min_length=1)
-    abstract: Optional[str] = None
-    content: Optional[str] = None
+    title: str = Field(..., min_length=1, max_length=PAPER_TITLE_MAX_LENGTH)
+    abstract: Optional[str] = Field(None, max_length=PAPER_ABSTRACT_MAX_LENGTH)
+    content: Optional[str] = Field(None, max_length=PAPER_CONTENT_MAX_LENGTH)
     is_public: bool = False
     category_id: Optional[int] = None
+
+    @field_validator("title")
+    @classmethod
+    def title_must_not_be_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Title must not be blank")
+        return value
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -117,11 +129,18 @@ class PaperCreate(BaseModel):
 
 
 class PaperUpdate(BaseModel):
-    title: Optional[str] = Field(None, min_length=1)
-    abstract: Optional[str] = None
-    content: Optional[str] = None
+    title: Optional[str] = Field(None, min_length=1, max_length=PAPER_TITLE_MAX_LENGTH)
+    abstract: Optional[str] = Field(None, max_length=PAPER_ABSTRACT_MAX_LENGTH)
+    content: Optional[str] = Field(None, max_length=PAPER_CONTENT_MAX_LENGTH)
     is_public: Optional[bool] = None
     category_id: Optional[int] = None
+
+    @field_validator("title")
+    @classmethod
+    def title_must_not_be_blank(cls, value: Optional[str]) -> Optional[str]:
+        if value is not None and not value.strip():
+            raise ValueError("Title must not be blank")
+        return value
 
     model_config = ConfigDict(
         json_schema_extra={
@@ -164,7 +183,14 @@ class PaperListResponse(BaseModel):
 # ---------------------------------------------------------------------------
 
 class CollectionCreate(BaseModel):
-    name: str
+    name: str = Field(..., min_length=1, max_length=COLLECTION_NAME_MAX_LENGTH)
+
+    @field_validator("name")
+    @classmethod
+    def name_must_not_be_blank(cls, value: str) -> str:
+        if not value.strip():
+            raise ValueError("Collection name must not be blank")
+        return value
 
     model_config = ConfigDict(
         json_schema_extra={"examples": [{"name": "My ML Papers"}]}
@@ -172,7 +198,16 @@ class CollectionCreate(BaseModel):
 
 
 class CollectionUpdate(BaseModel):
-    name: Optional[str] = Field(None, min_length=1)
+    name: Optional[str] = Field(
+        None, min_length=1, max_length=COLLECTION_NAME_MAX_LENGTH
+    )
+
+    @field_validator("name")
+    @classmethod
+    def name_must_not_be_blank(cls, value: Optional[str]) -> Optional[str]:
+        if value is not None and not value.strip():
+            raise ValueError("Collection name must not be blank")
+        return value
 
     model_config = ConfigDict(
         json_schema_extra={"examples": [{"name": "Updated Collection Name"}]}

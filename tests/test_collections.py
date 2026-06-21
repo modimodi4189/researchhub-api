@@ -2,6 +2,8 @@
 
 import pytest
 
+from app.schemas.schemas import COLLECTION_NAME_MAX_LENGTH
+
 COLLECTION_PAYLOAD = {"name": "My Research"}
 
 
@@ -23,6 +25,21 @@ async def test_create_collection(auth_client):
 async def test_create_collection_requires_auth(client):
     r = await client.post("/api/v1/collections", json=COLLECTION_PAYLOAD)
     assert r.status_code == 403
+
+
+async def test_create_collection_rejects_whitespace_name(auth_client):
+    client, _ = auth_client
+    r = await client.post("/api/v1/collections", json={"name": "   \t"})
+    assert r.status_code == 422
+
+
+async def test_create_collection_rejects_oversized_name(auth_client):
+    client, _ = auth_client
+    r = await client.post(
+        "/api/v1/collections",
+        json={"name": "C" * (COLLECTION_NAME_MAX_LENGTH + 1)},
+    )
+    assert r.status_code == 422
 
 
 # ---------------------------------------------------------------------------
@@ -96,6 +113,30 @@ async def test_update_collection_empty_body_is_noop(auth_client):
     r = await client.patch(f"/api/v1/collections/{coll_id}", json={})
     assert r.status_code == 200
     assert r.json()["name"] == original_name
+
+
+async def test_update_collection_rejects_whitespace_name(auth_client):
+    client, _ = auth_client
+    coll_r = await client.post("/api/v1/collections", json=COLLECTION_PAYLOAD)
+    coll_id = coll_r.json()["id"]
+
+    r = await client.patch(
+        f"/api/v1/collections/{coll_id}",
+        json={"name": " \n\t "},
+    )
+    assert r.status_code == 422
+
+
+async def test_update_collection_rejects_oversized_name(auth_client):
+    client, _ = auth_client
+    coll_r = await client.post("/api/v1/collections", json=COLLECTION_PAYLOAD)
+    coll_id = coll_r.json()["id"]
+
+    r = await client.patch(
+        f"/api/v1/collections/{coll_id}",
+        json={"name": "C" * (COLLECTION_NAME_MAX_LENGTH + 1)},
+    )
+    assert r.status_code == 422
 
 
 async def test_update_collection_not_owner(client, auth_client):

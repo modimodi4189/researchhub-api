@@ -18,9 +18,9 @@ def process_paper(paper_id: int, text: str, owner_id: int, is_public: bool):
             add_paper_to_index(paper_id, text, owner_id, is_public)
         logger.info(f"Successfully indexed paper {paper_id}")
         return {"status": "completed", "paper_id": paper_id}
-    except Exception as e:
-        logger.error(f"Error indexing paper {paper_id}: {e}")
-        return {"status": "error", "paper_id": paper_id, "message": str(e)}
+    except Exception:
+        logger.exception(f"Error indexing paper {paper_id}")
+        raise
 
 
 @celery_app.task(name="remove_paper_from_index_task")
@@ -35,9 +35,9 @@ def remove_paper_from_index_task(paper_id: int, owner_id: int, is_public: bool):
         remove_paper_from_index(paper_id, owner_id, is_public)
         logger.info(f"Successfully removed paper {paper_id} from index")
         return {"status": "completed", "paper_id": paper_id}
-    except Exception as e:
-        logger.error(f"Error removing paper {paper_id} from index: {e}")
-        return {"status": "error", "paper_id": paper_id, "message": str(e)}
+    except Exception:
+        logger.exception(f"Error removing paper {paper_id} from index")
+        raise
 
 
 @celery_app.task(name="update_paper_index_task")
@@ -62,6 +62,6 @@ def update_paper_index_task(
         )
         logger.info(f"Successfully updated index for paper {paper_id}")
         return {"status": "completed", "paper_id": paper_id}
-    except Exception as e:
-        logger.error(f"Error updating index for paper {paper_id}: {e}")
-        return {"status": "error", "paper_id": paper_id, "message": str(e)}
+    except Exception:
+        logger.exception(f"Error updating index for paper {paper_id}")
+        raise

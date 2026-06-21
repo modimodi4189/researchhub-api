@@ -4,6 +4,12 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from app.schemas.schemas import (
+    PAPER_ABSTRACT_MAX_LENGTH,
+    PAPER_CONTENT_MAX_LENGTH,
+    PAPER_TITLE_MAX_LENGTH,
+)
+
 PAPER_PAYLOAD = {
     "title": "Neural Networks 101",
     "abstract": "An intro to neural networks.",
@@ -37,6 +43,36 @@ async def test_create_paper_requires_auth(client):
 async def test_create_paper_missing_title(auth_client):
     client, _ = auth_client
     r = await client.post("/api/v1/papers", json={"content": "Some content"})
+    assert r.status_code == 422
+
+
+async def test_create_paper_rejects_whitespace_title(auth_client):
+    client, _ = auth_client
+    r = await client.post("/api/v1/papers", json={**PAPER_PAYLOAD, "title": "   \t"})
+    assert r.status_code == 422
+
+
+async def test_create_paper_rejects_invalid_category_id(auth_client):
+    client, _ = auth_client
+    r = await client.post(
+        "/api/v1/papers",
+        json={**PAPER_PAYLOAD, "category_id": 999999},
+    )
+    assert r.status_code == 404
+    assert r.json()["detail"] == "Category not found"
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("title", "T" * (PAPER_TITLE_MAX_LENGTH + 1)),
+        ("abstract", "A" * (PAPER_ABSTRACT_MAX_LENGTH + 1)),
+        ("content", "C" * (PAPER_CONTENT_MAX_LENGTH + 1)),
+    ],
+)
+async def test_create_paper_rejects_oversized_fields(auth_client, field, value):
+    client, _ = auth_client
+    r = await client.post("/api/v1/papers", json={**PAPER_PAYLOAD, field: value})
     assert r.status_code == 422
 
 
@@ -125,6 +161,44 @@ async def test_update_paper(auth_client, created_paper):
     assert data["updated_at"] is not None
 
 
+async def test_update_paper_rejects_whitespace_title(auth_client, created_paper):
+    client, _ = auth_client
+    r = await client.patch(
+        f"/api/v1/papers/{created_paper['id']}",
+        json={"title": " \n\t "},
+    )
+    assert r.status_code == 422
+
+
+async def test_update_paper_rejects_invalid_category_id(auth_client, created_paper):
+    client, _ = auth_client
+    r = await client.patch(
+        f"/api/v1/papers/{created_paper['id']}",
+        json={"category_id": 999999},
+    )
+    assert r.status_code == 404
+    assert r.json()["detail"] == "Category not found"
+
+
+@pytest.mark.parametrize(
+    ("field", "value"),
+    [
+        ("title", "T" * (PAPER_TITLE_MAX_LENGTH + 1)),
+        ("abstract", "A" * (PAPER_ABSTRACT_MAX_LENGTH + 1)),
+        ("content", "C" * (PAPER_CONTENT_MAX_LENGTH + 1)),
+    ],
+)
+async def test_update_paper_rejects_oversized_fields(
+    auth_client, created_paper, field, value
+):
+    client, _ = auth_client
+    r = await client.patch(
+        f"/api/v1/papers/{created_paper['id']}",
+        json={field: value},
+    )
+    assert r.status_code == 422
+
+
 async def test_update_public_to_private_dispatches_index_sync(auth_client, monkeypatch):
     client, _ = auth_client
     update_index_mock = MagicMock()
@@ -208,6 +282,33 @@ async def test_summarize_paper(auth_client, created_paper):
     assert data["summary"] == "Mocked summary."
 
 
+async def test_summarize_paper_failure_does_not_update_summary(
+    auth_client, created_paper, monkeypatch
+):
+    client, _ = auth_client
+    paper_id = created_paper["id"]
+
+    first_response = await client.post(f"/api/v1/papers/{paper_id}/summarize")
+    assert first_response.status_code == 200
+    original_summary = first_response.json()["summary"]
+
+    def fail_summarization(text):
+        raise RuntimeError("summarizer unavailable")
+
+    monkeypatch.setattr(
+        "app.api.v1.papers.router.summarize_text",
+        fail_summarization,
+    )
+
+    r = await client.post(f"/api/v1/papers/{paper_id}/summarize")
+    assert r.status_code == 503
+    assert r.json()["detail"] == "Summary generation failed"
+
+    persisted = await client.get(f"/api/v1/papers/{paper_id}")
+    assert persisted.status_code == 200
+    assert persisted.json()["summary"] == original_summary
+
+
 async def test_summarize_paper_no_content(auth_client):
     client, _ = auth_client
     r = await client.post(
@@ -242,6 +343,34 @@ async def test_classify_paper_persists_category(auth_client, created_paper):
     assert r.status_code == 200
     data = r.json()
     assert data["category_id"] is not None
+
+
+async def test_classify_paper_failure_does_not_update_category(
+    auth_client, created_paper, monkeypatch
+):
+    client, _ = auth_client
+    paper_id = created_paper["id"]
+
+    first_response = await client.post(f"/api/v1/papers/{paper_id}/classify")
+    assert first_response.status_code == 200
+    original_category_id = first_response.json()["category_id"]
+    assert original_category_id is not None
+
+    def fail_classification(text):
+        raise RuntimeError("classifier unavailable")
+
+    monkeypatch.setattr(
+        "app.api.v1.papers.router.classify_paper",
+        fail_classification,
+    )
+
+    r = await client.post(f"/api/v1/papers/{paper_id}/classify")
+    assert r.status_code == 503
+    assert r.json()["detail"] == "Paper classification failed"
+
+    persisted = await client.get(f"/api/v1/papers/{paper_id}")
+    assert persisted.status_code == 200
+    assert persisted.json()["category_id"] == original_category_id
 
 
 async def test_classify_paper_non_owner_rejected(client, created_paper):

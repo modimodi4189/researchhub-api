@@ -37,14 +37,11 @@ def classify_paper(text: str, candidate_labels: list = None) -> dict:
     pipe = get_classifier()
     text = text[:1500]
 
-    try:
-        result = pipe(text, candidate_labels=candidate_labels, multi_label=False)
-        return {
-            "category": result["labels"][0],
-            "confidence": result["scores"][0],
-        }
-    except Exception as e:
-        return {"category": "unknown", "confidence": 0.0, "error": str(e)}
+    result = pipe(text, candidate_labels=candidate_labels, multi_label=False)
+    return {
+        "category": result["labels"][0],
+        "confidence": result["scores"][0],
+    }
 
 
 def get_default_categories() -> list:

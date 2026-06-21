@@ -24,12 +24,23 @@ def _paper_index_text(paper: Paper) -> str | None:
     return paper.content or paper.abstract or paper.title
 
 
+async def _ensure_category_exists(category_id: int | None, db: AsyncSession) -> None:
+    if category_id is None:
+        return
+
+    result = await db.execute(select(Category.id).where(Category.id == category_id))
+    if result.scalar_one_or_none() is None:
+        raise HTTPException(status_code=404, detail="Category not found")
+
+
 @router.post("", response_model=PaperResponse, status_code=status.HTTP_201_CREATED)
 async def create_paper(
     paper: PaperCreate,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> PaperResponse:
+    await _ensure_category_exists(paper.category_id, db)
+
     new_paper = Paper(
         title=paper.title,
         abstract=paper.abstract,
@@ -121,6 +132,9 @@ async def update_paper(
     old_owner_id = paper.owner_id
 
     update_data = paper_update.model_dump(exclude_unset=True)
+    if "category_id" in update_data:
+        await _ensure_category_exists(update_data["category_id"], db)
+
     for field, value in update_data.items():
         setattr(paper, field, value)
 
@@ -190,7 +204,14 @@ async def summarize_paper(
         raise HTTPException(status_code=422, detail="Paper has no content to summarize")
 
     loop = asyncio.get_running_loop()
-    summary = await loop.run_in_executor(ml_executor, summarize_text, paper.content)
+    try:
+        summary = await loop.run_in_executor(ml_executor, summarize_text, paper.content)
+    except Exception as exc:
+        logger.exception(f"Failed to generate summary for paper {paper_id}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Summary generation failed",
+        ) from exc
 
     paper.summary = summary
     await db.commit()
@@ -219,7 +240,14 @@ async def classify_paper_endpoint(
         raise HTTPException(status_code=422, detail="Paper has no text to classify")
 
     loop = asyncio.get_running_loop()
-    classification = await loop.run_in_executor(ml_executor, classify_paper, text_to_classify)
+    try:
+        classification = await loop.run_in_executor(ml_executor, classify_paper, text_to_classify)
+    except Exception as exc:
+        logger.exception(f"Failed to classify paper {paper_id}")
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="Paper classification failed",
+        ) from exc
 
     category_name = classification.get("category")
     if category_name and category_name != "unknown":
