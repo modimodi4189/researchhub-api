@@ -1,8 +1,48 @@
 """Tests for /api/v1/auth/* endpoints."""
 
+from contextlib import contextmanager
+
 import pytest
 
+from app.core.limiter import limiter
+from app.main import app
+
 CREDS = {"email": "auth_test@example.com", "password": "securepass123"}
+
+
+def _reset_limiter_state():
+    reset = getattr(limiter, "reset", None)
+    if reset is not None:
+        reset()
+        return
+
+    storage = getattr(limiter, "_storage", None)
+    if storage is None:
+        rate_limiter = getattr(limiter, "_limiter", None)
+        storage = getattr(rate_limiter, "storage", None)
+
+    if storage is not None:
+        storage.reset()
+
+
+@pytest.fixture
+def enable_rate_limiter():
+    @contextmanager
+    def _enabled():
+        was_enabled = limiter.enabled
+        _reset_limiter_state()
+        limiter.enabled = True
+        try:
+            yield
+        finally:
+            limiter.enabled = was_enabled
+            _reset_limiter_state()
+
+    return _enabled
+
+
+def test_app_uses_shared_limiter_instance():
+    assert app.state.limiter is limiter
 
 
 # ---------------------------------------------------------------------------
@@ -51,6 +91,28 @@ async def test_register_empty_password(client):
     assert r.status_code == 422
 
 
+async def test_register_is_rate_limited(client, enable_rate_limiter):
+    with enable_rate_limiter():
+        for i in range(10):
+            r = await client.post(
+                "/api/v1/auth/register",
+                json={
+                    "email": f"limited-register-{i}@example.com",
+                    "password": "securepass123",
+                },
+            )
+            assert r.status_code == 201
+
+        r = await client.post(
+            "/api/v1/auth/register",
+            json={
+                "email": "limited-register-10@example.com",
+                "password": "securepass123",
+            },
+        )
+        assert r.status_code == 429
+
+
 # ---------------------------------------------------------------------------
 # Login
 # ---------------------------------------------------------------------------
@@ -80,6 +142,22 @@ async def test_login_unknown_email(client):
         json={"email": "nobody@example.com", "password": "whatever12"},
     )
     assert r.status_code == 401
+
+
+async def test_login_is_rate_limited(client, enable_rate_limiter):
+    with enable_rate_limiter():
+        for _ in range(10):
+            r = await client.post(
+                "/api/v1/auth/login",
+                json={"email": "nobody@example.com", "password": "whatever12"},
+            )
+            assert r.status_code == 401
+
+        r = await client.post(
+            "/api/v1/auth/login",
+            json={"email": "nobody@example.com", "password": "whatever12"},
+        )
+        assert r.status_code == 429
 
 
 # ---------------------------------------------------------------------------
@@ -112,6 +190,26 @@ async def test_refresh_with_access_token_rejected(client):
 async def test_refresh_with_garbage_token_rejected(client):
     r = await client.post("/api/v1/auth/refresh", json={"refresh_token": "not.a.token"})
     assert r.status_code == 401
+
+
+async def test_refresh_is_rate_limited(client, enable_rate_limiter):
+    await client.post("/api/v1/auth/register", json=CREDS)
+    login_r = await client.post("/api/v1/auth/login", json=CREDS)
+    refresh_token = login_r.json()["refresh_token"]
+
+    with enable_rate_limiter():
+        for _ in range(20):
+            r = await client.post(
+                "/api/v1/auth/refresh",
+                json={"refresh_token": refresh_token},
+            )
+            assert r.status_code == 200
+
+        r = await client.post(
+            "/api/v1/auth/refresh",
+            json={"refresh_token": refresh_token},
+        )
+        assert r.status_code == 429
 
 
 # ---------------------------------------------------------------------------

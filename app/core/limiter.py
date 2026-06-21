@@ -2,7 +2,7 @@
 Shared rate limiter instance.
 
 Defined here to avoid circular imports:
-  main.py imports routers → routers need the limiter → limiter can't import main.
+  main.py imports routers -> routers need the limiter -> limiter can't import main.
 
 app/main.py and all routers import from this module.
 """
