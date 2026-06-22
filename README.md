@@ -38,7 +38,7 @@ An AI-powered research paper organization system built with FastAPI. Features se
 
 ### Prerequisites
 
-- Docker & Docker Compose
+- Docker and Docker Compose v2 (`docker compose`)
 - Generated local values for `SECRET_KEY` and `POSTGRES_PASSWORD` (see below)
 
 ### Setup
@@ -61,11 +61,18 @@ An AI-powered research paper organization system built with FastAPI. Features se
 
    `.env.example` is for local development only. `SECRET_KEY` and
    `POSTGRES_PASSWORD` are intentionally blank, and Docker Compose will refuse
-   to start until both are set.
+   to start until both are set. If you already had a local `.env` before the
+   secret-hardening changes, add a `POSTGRES_PASSWORD=...` line to it before
+   running any Docker Compose command.
 
-3. Start the services:
+3. Validate the Compose file can read your local secrets:
    ```bash
-   docker-compose up -d
+   docker compose config
+   ```
+
+4. Start the services:
+   ```bash
+   docker compose up -d
    ```
 
    The `migrate` service runs `alembic upgrade head` automatically before the API starts.
@@ -73,8 +80,8 @@ An AI-powered research paper organization system built with FastAPI. Features se
 The API will be available at `http://localhost:8000`.
 
 Only the API port is published to the host by default. Postgres and Redis stay
-on the private Docker Compose network; use `docker-compose exec postgres psql -U
-postgres -d researchhub` or `docker-compose exec redis redis-cli` for local
+on the private Docker Compose network; use `docker compose exec postgres psql -U
+postgres -d researchhub` or `docker compose exec redis redis-cli` for local
 inspection. Add temporary host port mappings only when a local GUI or debugger
 needs direct database/cache access.
 
@@ -127,8 +134,8 @@ Interactive docs available at:
 | Variable | Description | Required |
 |----------|-------------|----------|
 | `SECRET_KEY` | JWT signing key — generate with `secrets.token_hex(32)` | **Yes** |
-| `DATABASE_URL` | PostgreSQL async connection string | **Yes** |
-| `POSTGRES_PASSWORD` | Postgres password (used by docker-compose) | **Yes** |
+| `DATABASE_URL` | PostgreSQL async connection string. Docker Compose builds its service URL from `POSTGRES_PASSWORD`; this value is used when running the app directly on the host. | **Yes** |
+| `POSTGRES_PASSWORD` | Local Postgres password used by Docker Compose. Required before any Compose command can expand `docker-compose.yml`. | **Yes** |
 | `REDIS_URL` | Redis connection string for Celery and refresh-token invalidation | **Yes** |
 | `CORS_ORIGINS` | JSON list of allowed browser origins. Empty means no CORS origins; `*` is rejected unless `DEBUG=True`. | Default: local frontend/API origins |
 | `ALGORITHM` | JWT algorithm | Default: `HS256` |
@@ -143,13 +150,13 @@ Tests run inside Docker against a dedicated `test_researchhub` database. ML infe
 
 ```bash
 # Create the test database (one-time setup)
-docker-compose exec postgres psql -U postgres -c "CREATE DATABASE test_researchhub;"
+docker compose exec postgres psql -U postgres -c "CREATE DATABASE test_researchhub;"
 
 # Run Alembic migrations against the test database
-docker-compose exec api sh -lc 'DATABASE_URL="${DATABASE_URL%/*}/test_researchhub" alembic upgrade head'
+docker compose exec api sh -lc 'DATABASE_URL="${DATABASE_URL%/*}/test_researchhub" alembic upgrade head'
 
 # Run the test suite
-docker-compose exec api python -m pytest --tb=short
+docker compose exec api python -m pytest --tb=short
 ```
 
 ## Known Limitations
