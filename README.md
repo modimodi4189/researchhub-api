@@ -1,18 +1,18 @@
 # ResearchHub API
 
-An AI-powered research paper organization system built with FastAPI. Features semantic search, automatic summarization, and zero-shot categorization using open-source ML models — no external API costs.
+An AI-powered research paper organization system built with FastAPI. Features semantic search, automatic summarization, and zero-shot categorization using open-source ML models - no external API costs.
 
 ## Features
 
-- **RESTful API** — Full CRUD for research papers and collections
-- **JWT Authentication** — Secure registration, login, and Redis-backed refresh-token rotation
-- **Semantic Search** — Find papers by meaning using FAISS vector search + sentence-transformers
-- **Auto-Summarization** — distilbart-cnn-12-6 generates concise paper summaries
-- **Zero-Shot Classification** — Categorize papers without labelled training data (BART-large-MNLI)
-- **Collections** — Organize papers into named collections
-- **Rate Limiting** — Per-endpoint protection on auth routes
-- **Background Processing** — Celery + Redis for async ML indexing tasks
-- **Alembic Migrations** — Schema versioned and reproducible
+- **RESTful API** - Full CRUD for research papers and collections
+- **JWT Authentication** - Secure registration, login, and Redis-backed refresh-token rotation
+- **Semantic Search** - Find papers by meaning using FAISS vector search + sentence-transformers
+- **Auto-Summarization** - distilbart-cnn-12-6 generates concise paper summaries
+- **Zero-Shot Classification** - Categorize papers without labelled training data (BART-large-MNLI)
+- **Collections** - Organize papers into named collections
+- **Rate Limiting** - Per-endpoint protection on auth routes
+- **Background Processing** - Celery + Redis for async ML indexing tasks
+- **Alembic Migrations** - Schema versioned and reproducible
 
 ## Tech Stack
 
@@ -30,7 +30,7 @@ An AI-powered research paper organization system built with FastAPI. Features se
 | Classification | facebook/bart-large-mnli (zero-shot) |
 | Migrations | Alembic |
 | Container | Docker + Docker Compose |
-| CI/CD | GitHub Actions → GHCR |
+| CI/CD | GitHub Actions -> GHCR |
 
 > **Why distilbart over FLAN-T5?** FLAN-T5 is an instruction-following model designed for prompted generation tasks. Running it through the `summarization` pipeline produces inconsistent output because it is not fine-tuned for extractive summarization. distilbart-cnn-12-6 is a distilled BART model specifically fine-tuned on CNN/DailyMail for summarization, making it the correct tool for this task.
 
@@ -133,7 +133,7 @@ Interactive docs available at:
 
 | Variable | Description | Required |
 |----------|-------------|----------|
-| `SECRET_KEY` | JWT signing key — generate with `secrets.token_hex(32)` | **Yes** |
+| `SECRET_KEY` | JWT signing key - generate with `secrets.token_hex(32)` | **Yes** |
 | `DATABASE_URL` | PostgreSQL async connection string. Docker Compose builds its service URL from `POSTGRES_PASSWORD`; this value is used when running the app directly on the host. | **Yes** |
 | `POSTGRES_PASSWORD` | Local Postgres password used by Docker Compose. Required before any Compose command can expand `docker-compose.yml`. | **Yes** |
 | `REDIS_URL` | Redis connection string for Celery and refresh-token invalidation | **Yes** |
@@ -146,7 +146,7 @@ Interactive docs available at:
 
 ## Running Tests
 
-Tests run inside Docker against a dedicated `test_researchhub` database. ML inference and Celery tasks are mocked — the suite runs in seconds with no GPU required.
+Tests run inside Docker against a dedicated `test_researchhub` database. ML inference and Celery tasks are mocked - the suite runs in seconds with no GPU required.
 
 ```bash
 # Create the test database (one-time setup)
@@ -161,46 +161,46 @@ docker compose exec api python -m pytest --tb=short
 
 ## Known Limitations
 
-- **FAISS is single-machine** — horizontal scaling would require switching to pgvector, Pinecone, or Weaviate.
-- **Access token revocation** — access tokens remain valid until their short TTL expires; refresh tokens are invalidated on use via Redis.
-- **FAISS ↔ DB consistency** — if the Celery worker is down during a deletion, the paper is removed from Postgres but its vector remains in the index until the next indexing run. Search returns no results for stale IDs (DB lookup filters them silently).
-- **PDF upload** — `pdf_extractor.py` is implemented but not yet wired to a route.
+- **FAISS is single-machine** - horizontal scaling would require switching to pgvector, Pinecone, or Weaviate.
+- **Access token revocation** - access tokens remain valid until their short TTL expires; refresh tokens are invalidated on use via Redis.
+- **FAISS <-> DB consistency** - if the Celery worker is down during a deletion, the paper is removed from Postgres but its vector remains in the index until the next indexing run. Search returns no results for stale IDs (DB lookup filters them silently).
+- **PDF upload** - `pdf_extractor.py` is implemented but not yet wired to a route.
 
 ## Project Structure
 
 ```
 researchhub-api/
-├── app/
-│   ├── api/
-│   │   └── v1/
-│   │       ├── auth/          # Registration, login, refresh-token rotation
-│   │       ├── papers/        # Paper CRUD + summarize/classify
-│   │       ├── collections/   # Collection management
-│   │       └── search/        # Semantic search endpoints
-│   ├── core/
-│   │   ├── config.py          # Pydantic settings
-│   │   ├── security.py        # JWT utilities
-│   │   ├── executor.py        # Shared ThreadPoolExecutor for ML
-│   │   └── logging.py         # Loguru configuration
-│   ├── db/
-│   │   ├── models.py          # SQLAlchemy models
-│   │   └── database.py        # Async engine and session factory
-│   ├── ml/
-│   │   ├── embeddings.py      # sentence-transformers wrapper
-│   │   ├── faiss_index.py     # FAISS IndexIDMap operations
-│   │   ├── index_manager.py   # Per-user and public index management
-│   │   ├── summarizer.py      # distilbart-cnn-12-6 summarization
-│   │   ├── classifier.py      # Zero-shot classification
-│   │   └── pdf_extractor.py   # PDF text extraction (not yet routed)
-│   ├── schemas/               # Pydantic request/response models
-│   ├── tasks/                 # Celery background tasks
-│   ├── celery.py              # Celery app configuration
-│   └── main.py                # FastAPI application factory
-├── alembic/                   # Database migrations
-├── tests/                     # pytest test suite (49 tests)
-├── docker-compose.yml
-├── Dockerfile
-└── requirements.txt
+|-- app/
+|   |-- api/
+|   |   `-- v1/
+|   |       |-- auth/          # Registration, login, refresh-token rotation
+|   |       |-- papers/        # Paper CRUD + summarize/classify
+|   |       |-- collections/   # Collection management
+|   |       `-- search/        # Semantic search endpoints
+|   |-- core/
+|   |   |-- config.py          # Pydantic settings
+|   |   |-- security.py        # JWT utilities
+|   |   |-- executor.py        # Shared ThreadPoolExecutor for ML
+|   |   `-- logging.py         # Loguru configuration
+|   |-- db/
+|   |   |-- models.py          # SQLAlchemy models
+|   |   `-- database.py        # Async engine and session factory
+|   |-- ml/
+|   |   |-- embeddings.py      # sentence-transformers wrapper
+|   |   |-- faiss_index.py     # FAISS IndexIDMap operations
+|   |   |-- index_manager.py   # Per-user and public index management
+|   |   |-- summarizer.py      # distilbart-cnn-12-6 summarization
+|   |   |-- classifier.py      # Zero-shot classification
+|   |   `-- pdf_extractor.py   # PDF text extraction (not yet routed)
+|   |-- schemas/               # Pydantic request/response models
+|   |-- tasks/                 # Celery background tasks
+|   |-- celery.py              # Celery app configuration
+|   `-- main.py                # FastAPI application factory
+|-- alembic/                   # Database migrations
+|-- tests/                     # pytest test suite (84 tests)
+|-- docker-compose.yml
+|-- Dockerfile
+`-- requirements.txt
 ```
 
 ## License
