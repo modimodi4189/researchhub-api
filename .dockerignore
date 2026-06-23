@@ -1,21 +1,41 @@
+# VCS and editor metadata
 .git/
 .github/
 .gitignore
-.env
-.env.example
-.pytest_cache/
+.agents/
+.codex/
 .vscode/
 .idea/
 
+# Local secrets. Keep .env.example in the image as safe setup documentation.
+.env
+.env.*
+!.env.example
+
+# Python caches, virtualenvs, and test artifacts
 __pycache__/
-*.pyc
-*.pyo
-
-venv/
-.venv/
-
-logs/
-ml_artifacts/
+*.py[cod]
+*$py.class
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+coverage.xml
+htmlcov/
 pytest_output.txt
+tests/
+pytest.ini
 
-README.md
+# Local runtime state and generated artifacts
+logs/
+*.log
+ml_artifacts/
+.cache/
+tmp/
+*.tmp
+.DS_Store
+
+# Packaging/build output
+build/
+dist/
+*.egg-info/
