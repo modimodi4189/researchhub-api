@@ -2,11 +2,21 @@
 
 ## API Client
 
+Create a local env file from the example:
+
+```bash
+cp .env.example .env.local
+```
+
 Set the FastAPI base URL in `.env.local`:
 
 ```env
 NEXT_PUBLIC_API_BASE_URL=http://localhost:8000
 ```
+
+Use the backend origin only, without `/health` or `/api/v1` at the end. Restart
+`npm run dev` after changing this value because Next.js reads public env values
+when the dev server starts.
 
 The API client foundation lives in `lib/api`. It provides:
 
@@ -43,3 +53,10 @@ const papers = await apiFetch<PaginationResponse<PaperListItem>>(
 ```bash
 npm run dev
 ```
+
+With the backend running at `http://localhost:8000`, the app shell shows a small
+API status indicator:
+
+- `Loading` while `/health` is being checked.
+- `Connected` when `/health` returns `{"status":"healthy"}`.
+- `Disconnected` when the request fails or the backend reports another status.

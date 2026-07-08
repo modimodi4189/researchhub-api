@@ -10,6 +10,7 @@ import {
   Settings,
   Sparkles,
 } from "lucide-react";
+import { ApiHealthStatus } from "@/components/api-health-status";
 
 const navigation = [
   { name: "Library", icon: Library, active: true },
@@ -107,6 +108,7 @@ export default function Home() {
               </p>
             </div>
             <div className="flex items-center gap-3">
+              <ApiHealthStatus />
               <button
                 type="button"
                 className="flex size-9 items-center justify-center rounded-md border border-border bg-surface text-muted-foreground hover:text-foreground"
