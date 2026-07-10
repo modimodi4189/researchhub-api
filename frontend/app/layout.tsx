@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import { AuthProvider } from "@/components/auth/auth-provider";
 import { Toaster } from "@/components/ui/sonner";
 
 export const metadata: Metadata = {
@@ -15,8 +16,10 @@ export default function RootLayout({
   return (
     <html lang="en" className="h-full font-sans antialiased">
       <body className="flex min-h-full flex-col">
-        {children}
-        <Toaster richColors closeButton />
+        <AuthProvider>
+          {children}
+          <Toaster richColors closeButton />
+        </AuthProvider>
       </body>
     </html>
   );

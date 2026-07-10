@@ -48,6 +48,26 @@ const papers = await apiFetch<PaginationResponse<PaperListItem>>(
 );
 ```
 
+## Auth Foundation
+
+The auth routes live at:
+
+- `/login`
+- `/register`
+- `/app`
+
+The browser token strategy for this stage is intentionally simple:
+
+- Store the access token under `researchhub.accessToken` in `localStorage`.
+- Store the refresh token under `researchhub.refreshToken` in `localStorage`.
+- Clear both keys on logout or unrecoverable authentication failure.
+- Retry authenticated API calls once after a `401` by rotating the refresh token
+  through `POST /api/v1/auth/refresh`.
+
+Registration uses `POST /api/v1/auth/register`, then immediately logs in with
+the same credentials through `POST /api/v1/auth/login` because the backend
+register endpoint returns a user object rather than a token pair.
+
 ## Development
 
 ```bash

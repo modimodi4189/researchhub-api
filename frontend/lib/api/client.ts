@@ -13,7 +13,9 @@ export type ApiFetchOptions = Omit<RequestInit, "body"> & {
   auth?: boolean;
   body?: BodyInit | JsonBody | null;
   getAccessToken?: AccessTokenProvider;
+  onAuthFailure?: () => void;
   query?: Record<string, string | number | boolean | null | undefined>;
+  refreshAccessToken?: AccessTokenProvider;
   responseType?: "json" | "text" | "void";
 };
 
@@ -24,30 +26,45 @@ export async function apiFetch<T>(
     body,
     getAccessToken,
     headers,
+    onAuthFailure,
     query,
+    refreshAccessToken,
     responseType = "json",
     ...init
   }: ApiFetchOptions = {},
 ): Promise<T> {
-  const requestHeaders = new Headers(headers);
+  const initialToken = auth && getAccessToken ? await getAccessToken() : null;
+  let response = await sendRequest(initialToken);
 
-  if (body && isJsonBody(body) && !requestHeaders.has("Content-Type")) {
-    requestHeaders.set("Content-Type", "application/json");
+  if (response.status === 401 && auth && refreshAccessToken) {
+    const refreshedToken = await refreshAccessToken();
+
+    if (refreshedToken) {
+      response = await sendRequest(refreshedToken);
+    }
   }
 
-  if (auth && getAccessToken) {
-    const token = await getAccessToken();
+  if (response.status === 401 && auth) {
+    onAuthFailure?.();
+  }
+
+  async function sendRequest(token: string | null | undefined) {
+    const requestHeaders = new Headers(headers);
+
+    if (body && isJsonBody(body) && !requestHeaders.has("Content-Type")) {
+      requestHeaders.set("Content-Type", "application/json");
+    }
 
     if (token) {
       requestHeaders.set("Authorization", `Bearer ${token}`);
     }
-  }
 
-  const response = await fetch(buildApiUrl(path, query, getApiBaseUrl()), {
-    ...init,
-    body: serializeBody(body),
-    headers: requestHeaders,
-  });
+    return fetch(buildApiUrl(path, query, getApiBaseUrl()), {
+      ...init,
+      body: serializeBody(body),
+      headers: requestHeaders,
+    });
+  }
 
   if (!response.ok) {
     throw await createApiError(response);

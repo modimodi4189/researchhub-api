@@ -1,5 +1,7 @@
 export { apiFetch } from "@/lib/api/client";
 export type { AccessTokenProvider, ApiFetchOptions } from "@/lib/api/client";
+export { loginUser, refreshSession, registerUser } from "@/lib/api/auth";
+export type { AuthCredentials } from "@/lib/api/auth";
 export { getApiBaseUrl } from "@/lib/api/config";
 export { ApiError, isApiError } from "@/lib/api/errors";
 export type { ApiErrorDetail } from "@/lib/api/errors";
