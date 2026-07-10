@@ -1,11 +1,8 @@
 "use client";
 
 import {
-  Archive,
   Bell,
-  BookOpen,
   Compass,
-  FileText,
   FolderKanban,
   Library,
   LogOut,
@@ -15,6 +12,7 @@ import {
 } from "lucide-react";
 import { useAuth } from "@/components/auth/auth-provider";
 import { ApiHealthStatus } from "@/components/api-health-status";
+import { PaperLibrary } from "@/components/papers/paper-library";
 import { Button } from "@/components/ui/button";
 
 const navigation = [
@@ -23,37 +21,6 @@ const navigation = [
   { name: "Collections", icon: FolderKanban },
   { name: "Public Papers", icon: Compass },
   { name: "Settings", icon: Settings },
-];
-
-const sections = [
-  {
-    title: "Library",
-    description: "The authenticated paper library will land here later.",
-    icon: BookOpen,
-    meta: "Protected workspace",
-    items: ["Recent papers", "Reading queue", "Annotations"],
-  },
-  {
-    title: "Search",
-    description: "Semantic discovery stays out of this auth milestone.",
-    icon: Search,
-    meta: "Future workflow",
-    items: ["Query input", "Filters", "Result preview"],
-  },
-  {
-    title: "Collections",
-    description: "Collection management will build on this session layer.",
-    icon: Archive,
-    meta: "Future workflow",
-    items: ["Collection list", "Shared themes", "Pinned groups"],
-  },
-  {
-    title: "Public Papers",
-    description: "Public browsing remains a later authenticated app surface.",
-    icon: FileText,
-    meta: "Future workflow",
-    items: ["Browse feed", "Topic chips", "Paper summaries"],
-  },
 ];
 
 export function AppShell() {
@@ -103,7 +70,7 @@ export function AppShell() {
             <div>
               <p className="text-sm font-medium">Library</p>
               <p className="text-xs text-muted-foreground">
-                Authenticated workspace shell. Paper workflows come next.
+                Authenticated papers loaded from the backend API.
               </p>
             </div>
             <div className="flex items-center gap-3">
@@ -124,72 +91,7 @@ export function AppShell() {
           </header>
 
           <div className="flex-1 overflow-auto px-7 py-6">
-            <div className="mx-auto max-w-6xl">
-              <section className="mb-6 rounded-md border border-border bg-surface px-6 py-5">
-                <div className="flex items-start justify-between gap-6">
-                  <div>
-                    <p className="text-xs font-medium uppercase tracking-[0.18em] text-muted-foreground">
-                      Auth foundation
-                    </p>
-                    <h1 className="mt-3 text-2xl font-semibold tracking-tight">
-                      Session-aware workspace shell
-                    </h1>
-                    <p className="mt-2 max-w-2xl text-sm leading-6 text-muted-foreground">
-                      Login, registration, token persistence, refresh-aware API
-                      requests, logout, and client-side route protection are in
-                      place. The paper library is intentionally still a
-                      placeholder.
-                    </p>
-                  </div>
-                  <div className="hidden rounded-md border border-border bg-muted px-4 py-3 text-right md:block">
-                    <p className="text-xs text-muted-foreground">Session</p>
-                    <p className="text-sm font-medium">Authenticated</p>
-                  </div>
-                </div>
-              </section>
-
-              <div className="grid grid-cols-2 gap-4">
-                {sections.map((section) => (
-                  <section
-                    key={section.title}
-                    id={section.title.toLowerCase().replaceAll(" ", "-")}
-                    className="min-h-56 rounded-md border border-border bg-card p-5"
-                  >
-                    <div className="flex items-start justify-between gap-4">
-                      <div className="flex items-center gap-3">
-                        <div className="flex size-10 items-center justify-center rounded-md bg-muted text-primary">
-                          <section.icon className="size-5" aria-hidden="true" />
-                        </div>
-                        <div>
-                          <h2 className="text-base font-semibold">
-                            {section.title}
-                          </h2>
-                          <p className="text-xs text-muted-foreground">
-                            {section.meta}
-                          </p>
-                        </div>
-                      </div>
-                    </div>
-
-                    <p className="mt-4 text-sm leading-6 text-muted-foreground">
-                      {section.description}
-                    </p>
-
-                    <div className="mt-5 space-y-2">
-                      {section.items.map((item) => (
-                        <div
-                          key={item}
-                          className="flex items-center justify-between rounded-md border border-border bg-background px-3 py-2"
-                        >
-                          <span className="text-sm">{item}</span>
-                          <span className="h-2 w-16 rounded-full bg-muted" />
-                        </div>
-                      ))}
-                    </div>
-                  </section>
-                ))}
-              </div>
-            </div>
+            <PaperLibrary />
           </div>
         </section>
       </div>

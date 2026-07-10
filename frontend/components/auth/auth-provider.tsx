@@ -5,7 +5,7 @@ import {
   useCallback,
   useContext,
   useMemo,
-  useState,
+  useSyncExternalStore,
 } from "react";
 import { useRouter } from "next/navigation";
 import { apiFetch, type ApiFetchOptions } from "@/lib/api";
@@ -16,6 +16,7 @@ import {
   type AuthCredentials,
 } from "@/lib/api/auth";
 import {
+  AUTH_STORAGE_EVENT,
   clearStoredTokens,
   getStoredTokens,
   storeTokens,
@@ -38,25 +39,30 @@ const AuthContext = createContext<AuthContextValue | null>(null);
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const router = useRouter();
-  const [tokens, setTokens] = useState<StoredTokens | null>(() => {
-    const storedTokens = getStoredTokens();
-    return storedTokens;
-  });
-  const [status, setStatus] = useState<AuthStatus>(() => {
-    return getStoredTokens() ? "authenticated" : "guest";
-  });
+  const hasHydrated = useSyncExternalStore(
+    subscribeToHydration,
+    getHydratedSnapshot,
+    getServerHydratedSnapshot,
+  );
+  const tokenSnapshot = useSyncExternalStore(
+    subscribeToStoredTokens,
+    getStoredTokenSnapshot,
+    getServerTokenSnapshot,
+  );
+  const tokens = useMemo(() => parseTokenSnapshot(tokenSnapshot), [tokenSnapshot]);
+  const status: AuthStatus = !hasHydrated
+    ? "loading"
+    : tokens
+      ? "authenticated"
+      : "guest";
 
   const logout = useCallback(() => {
     clearStoredTokens();
-    setTokens(null);
-    setStatus("guest");
     router.push("/login");
   }, [router]);
 
   const persistTokenPair = useCallback((tokenPair: Parameters<typeof storeTokens>[0]) => {
-    const nextTokens = storeTokens(tokenPair);
-    setTokens(nextTokens);
-    setStatus("authenticated");
+    storeTokens(tokenPair);
   }, []);
 
   const login = useCallback(
@@ -90,8 +96,6 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     try {
       const tokenPair = await refreshSession(refreshToken);
       const nextTokens = storeTokens(tokenPair);
-      setTokens(nextTokens);
-      setStatus("authenticated");
       return nextTokens.accessToken;
     } catch {
       logout();
@@ -135,4 +139,55 @@ export function useAuth() {
   }
 
   return context;
+}
+
+function subscribeToHydration(onStoreChange: () => void) {
+  queueMicrotask(onStoreChange);
+  return () => {};
+}
+
+function getHydratedSnapshot() {
+  return true;
+}
+
+function getServerHydratedSnapshot() {
+  return false;
+}
+
+function subscribeToStoredTokens(onStoreChange: () => void) {
+  window.addEventListener("storage", onStoreChange);
+  window.addEventListener(AUTH_STORAGE_EVENT, onStoreChange);
+
+  return () => {
+    window.removeEventListener("storage", onStoreChange);
+    window.removeEventListener(AUTH_STORAGE_EVENT, onStoreChange);
+  };
+}
+
+function getStoredTokenSnapshot() {
+  const tokens = getStoredTokens();
+
+  if (!tokens) {
+    return null;
+  }
+
+  return `${tokens.accessToken}\n${tokens.refreshToken}`;
+}
+
+function getServerTokenSnapshot() {
+  return null;
+}
+
+function parseTokenSnapshot(snapshot: string | null): StoredTokens | null {
+  if (!snapshot) {
+    return null;
+  }
+
+  const [accessToken, refreshToken] = snapshot.split("\n");
+
+  if (!accessToken || !refreshToken) {
+    return null;
+  }
+
+  return { accessToken, refreshToken };
 }
