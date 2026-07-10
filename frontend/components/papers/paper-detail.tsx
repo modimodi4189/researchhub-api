@@ -7,6 +7,7 @@ import {
   AlertCircle,
   ArrowLeft,
   CalendarDays,
+  Edit3,
   FileText,
   Hash,
   Lock,
@@ -14,11 +15,20 @@ import {
   ScrollText,
   Unlock,
 } from "lucide-react";
+import { toast } from "sonner";
 import { useAuth } from "@/components/auth/auth-provider";
+import { PaperForm } from "@/components/papers/paper-form";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { isApiError, type Paper } from "@/lib/api";
+import { isApiError, type Paper, type PaperMutationPayload } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 type DetailState =
@@ -80,10 +90,25 @@ export function PaperDetail({ paperId }: { paperId: string }) {
     );
   }
 
-  return <PaperDetailContent paper={state.data} />;
+  return (
+    <PaperDetailContent
+      paper={state.data}
+      onPaperUpdated={(paper) =>
+        setState({ status: "success", data: paper, error: null })
+      }
+    />
+  );
 }
 
-function PaperDetailContent({ paper }: { paper: Paper }) {
+function PaperDetailContent({
+  onPaperUpdated,
+  paper,
+}: {
+  onPaperUpdated: (paper: Paper) => void;
+  paper: Paper;
+}) {
+  const { apiRequest } = useAuth();
+  const [isEditOpen, setIsEditOpen] = useState(false);
   const updatedAt = paper.updated_at ?? paper.created_at;
   const dates = useMemo(
     () => [
@@ -92,6 +117,21 @@ function PaperDetailContent({ paper }: { paper: Paper }) {
     ],
     [paper.created_at, updatedAt],
   );
+
+  async function submitPaperUpdate(payload: PaperMutationPayload) {
+    return apiRequest<Paper>(`/api/v1/papers/${paper.id}`, {
+      method: "PATCH",
+      body: payload,
+    });
+  }
+
+  function handlePaperSaved(nextPaper: Paper) {
+    onPaperUpdated(nextPaper);
+    setIsEditOpen(false);
+    toast.success("Paper updated", {
+      description: `${nextPaper.title} has been saved.`,
+    });
+  }
 
   return (
     <article className="mx-auto flex max-w-7xl flex-col gap-5">
@@ -115,9 +155,15 @@ function PaperDetailContent({ paper }: { paper: Paper }) {
           </div>
 
           <div className="flex min-w-52 flex-col items-end gap-2 text-right">
-            <Badge variant="outline" className="h-7 rounded-md px-2.5">
-              GET /api/v1/papers/{paper.id}
-            </Badge>
+            <div className="flex items-center gap-2">
+              <Badge variant="outline" className="h-7 rounded-md px-2.5">
+                GET /api/v1/papers/{paper.id}
+              </Badge>
+              <Button type="button" onClick={() => setIsEditOpen(true)}>
+                <Edit3 className="size-4" aria-hidden="true" />
+                Edit
+              </Button>
+            </div>
             <p className="font-mono text-xs text-muted-foreground">
               Paper #{paper.id}
             </p>
@@ -146,6 +192,25 @@ function PaperDetailContent({ paper }: { paper: Paper }) {
           ))}
         </div>
       </div>
+
+      <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
+        <DialogContent className="max-h-[calc(100vh-4rem)] overflow-y-auto sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Edit Paper</DialogTitle>
+            <DialogDescription>
+              Save changes through PATCH /api/v1/papers/{paper.id}.
+            </DialogDescription>
+          </DialogHeader>
+          <PaperForm
+            initialPaper={paper}
+            cancelLabel="Cancel"
+            saveLabel="Save changes"
+            submitPaper={submitPaperUpdate}
+            onCancel={() => setIsEditOpen(false)}
+            onSaved={handlePaperSaved}
+          />
+        </DialogContent>
+      </Dialog>
 
       <div className="grid grid-cols-[minmax(0,0.9fr)_minmax(520px,1.4fr)] gap-5">
         <div className="flex min-w-0 flex-col gap-5">

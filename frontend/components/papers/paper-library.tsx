@@ -9,15 +9,31 @@ import {
   ChevronRight,
   FileText,
   Lock,
+  Plus,
   RefreshCw,
   Rows3,
   Unlock,
 } from "lucide-react";
+import { toast } from "sonner";
 import { useAuth } from "@/components/auth/auth-provider";
+import { PaperForm } from "@/components/papers/paper-form";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
-import { isApiError, type PaginationResponse, type PaperListItem } from "@/lib/api";
+import {
+  isApiError,
+  type PaginationResponse,
+  type Paper,
+  type PaperListItem,
+  type PaperMutationPayload,
+} from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const PAGE_SIZE = 10;
@@ -29,6 +45,7 @@ type LibraryState =
 
 export function PaperLibrary() {
   const { apiRequest } = useAuth();
+  const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [page, setPage] = useState(1);
   const [reloadKey, setReloadKey] = useState(0);
   const [state, setState] = useState<LibraryState>({
@@ -87,6 +104,22 @@ export function PaperLibrary() {
   const papers = state.status === "success" ? state.data.items : [];
   const isEmpty = state.status === "success" && papers.length === 0;
 
+  async function submitNewPaper(payload: PaperMutationPayload) {
+    return apiRequest<Paper>("/api/v1/papers", {
+      method: "POST",
+      body: payload,
+    });
+  }
+
+  function handlePaperCreated(paper: Paper) {
+    setIsCreateOpen(false);
+    setPage(1);
+    setReloadKey((value) => value + 1);
+    toast.success("Paper saved", {
+      description: `${paper.title} is now in your library.`,
+    });
+  }
+
   return (
     <section
       id="library"
@@ -97,7 +130,7 @@ export function PaperLibrary() {
         <div>
           <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-[0.14em] text-muted-foreground">
             <Rows3 className="size-4" aria-hidden="true" />
-            Read-only library
+            Paper workspace
           </div>
           <h1
             id="paper-library-title"
@@ -107,14 +140,20 @@ export function PaperLibrary() {
           </h1>
           <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
             Authenticated papers from the API, arranged for quick desktop
-            scanning without editing or automation actions.
+            scanning with focused create and edit actions.
           </p>
         </div>
 
-        <div className="flex min-w-44 flex-col items-end gap-2 text-right">
-          <Badge variant="outline" className="h-7 rounded-md px-2.5">
-            GET /api/v1/papers
-          </Badge>
+        <div className="flex min-w-52 flex-col items-end gap-2 text-right">
+          <div className="flex items-center gap-2">
+            <Badge variant="outline" className="h-7 rounded-md px-2.5">
+              GET /api/v1/papers
+            </Badge>
+            <Button type="button" onClick={() => setIsCreateOpen(true)}>
+              <Plus className="size-4" aria-hidden="true" />
+              New Paper
+            </Button>
+          </div>
           <p className="text-xs text-muted-foreground">
             {state.status === "success"
               ? `${pagination.total} total papers`
@@ -122,6 +161,24 @@ export function PaperLibrary() {
           </p>
         </div>
       </div>
+
+      <Dialog open={isCreateOpen} onOpenChange={setIsCreateOpen}>
+        <DialogContent className="max-h-[calc(100vh-4rem)] overflow-y-auto sm:max-w-3xl">
+          <DialogHeader>
+            <DialogTitle>Create Paper</DialogTitle>
+            <DialogDescription>
+              Save a paper through POST /api/v1/papers.
+            </DialogDescription>
+          </DialogHeader>
+          <PaperForm
+            cancelLabel="Cancel"
+            saveLabel="Create paper"
+            submitPaper={submitNewPaper}
+            onCancel={() => setIsCreateOpen(false)}
+            onSaved={handlePaperCreated}
+          />
+        </DialogContent>
+      </Dialog>
 
       {state.status === "loading" ? <PaperLibrarySkeleton /> : null}
 
