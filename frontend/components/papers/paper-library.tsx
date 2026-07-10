@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import {
   AlertCircle,
   BookOpen,
@@ -174,7 +175,11 @@ function PaperRow({ paper }: { paper: PaperListItem }) {
   const updatedLabel = formatDate(updatedAt);
 
   return (
-    <article className="grid min-h-28 grid-cols-[minmax(420px,1fr)_120px_126px_130px_96px] items-center gap-0 px-4 py-3 transition hover:bg-muted/35">
+    <Link
+      href={`/app/papers/${paper.id}`}
+      className="grid min-h-28 grid-cols-[minmax(420px,1fr)_120px_126px_130px_96px] items-center gap-0 px-4 py-3 transition hover:bg-muted/35 focus-visible:bg-muted/35 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40"
+      aria-label={`Open ${paper.title}`}
+    >
       <div className="min-w-0 pr-6">
         <div className="flex items-center gap-2">
           <FileText className="size-4 shrink-0 text-primary" aria-hidden="true" />
@@ -222,7 +227,7 @@ function PaperRow({ paper }: { paper: PaperListItem }) {
       <div className="text-right font-mono text-xs text-muted-foreground">
         {paper.id}
       </div>
-    </article>
+    </Link>
   );
 }
 

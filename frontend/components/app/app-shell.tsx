@@ -1,5 +1,6 @@
 "use client";
 
+import type { ReactNode } from "react";
 import {
   Bell,
   Compass,
@@ -16,14 +17,26 @@ import { PaperLibrary } from "@/components/papers/paper-library";
 import { Button } from "@/components/ui/button";
 
 const navigation = [
-  { name: "Library", icon: Library, active: true },
+  { name: "Library", icon: Library, href: "/app" },
   { name: "Search", icon: Search },
   { name: "Collections", icon: FolderKanban },
   { name: "Public Papers", icon: Compass },
   { name: "Settings", icon: Settings },
 ];
 
-export function AppShell() {
+type AppShellProps = {
+  activeNavigation?: string;
+  children?: ReactNode;
+  subtitle?: string;
+  title?: string;
+};
+
+export function AppShell({
+  activeNavigation = "Library",
+  children,
+  subtitle = "Authenticated papers loaded from the backend API.",
+  title = "Library",
+}: AppShellProps) {
   const { logout } = useAuth();
 
   return (
@@ -44,9 +57,12 @@ export function AppShell() {
             {navigation.map((item) => (
               <a
                 key={item.name}
-                href={`#${item.name.toLowerCase().replaceAll(" ", "-")}`}
+                href={
+                  item.href ??
+                  `#${item.name.toLowerCase().replaceAll(" ", "-")}`
+                }
                 className={`flex items-center gap-3 rounded-md px-3 py-2.5 text-sm transition ${
-                  item.active
+                  item.name === activeNavigation
                     ? "bg-sidebar-accent text-sidebar-accent-foreground shadow-sm"
                     : "text-muted-foreground hover:bg-sidebar-accent/70 hover:text-foreground"
                 }`}
@@ -68,10 +84,8 @@ export function AppShell() {
         <section className="flex min-w-0 flex-col">
           <header className="flex h-16 items-center justify-between border-b border-border bg-background/80 px-7">
             <div>
-              <p className="text-sm font-medium">Library</p>
-              <p className="text-xs text-muted-foreground">
-                Authenticated papers loaded from the backend API.
-              </p>
+              <p className="text-sm font-medium">{title}</p>
+              <p className="text-xs text-muted-foreground">{subtitle}</p>
             </div>
             <div className="flex items-center gap-3">
               <ApiHealthStatus />
@@ -91,7 +105,7 @@ export function AppShell() {
           </header>
 
           <div className="flex-1 overflow-auto px-7 py-6">
-            <PaperLibrary />
+            {children ?? <PaperLibrary />}
           </div>
         </section>
       </div>
