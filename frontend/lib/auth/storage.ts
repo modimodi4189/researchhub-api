@@ -2,6 +2,7 @@ import type { Token } from "@/lib/api/types";
 
 const ACCESS_TOKEN_KEY = "researchhub.accessToken";
 const REFRESH_TOKEN_KEY = "researchhub.refreshToken";
+const USER_EMAIL_KEY = "researchhub.userEmail";
 
 export const AUTH_STORAGE_EVENT = "researchhub:auth-storage";
 
@@ -25,7 +26,15 @@ export function getStoredTokens(): StoredTokens | null {
   return { accessToken, refreshToken };
 }
 
-export function storeTokens(token: Token): StoredTokens {
+export function getStoredUserEmail(): string | null {
+  if (typeof window === "undefined") {
+    return null;
+  }
+
+  return window.localStorage.getItem(USER_EMAIL_KEY);
+}
+
+export function storeTokens(token: Token, userEmail?: string): StoredTokens {
   const storedTokens = {
     accessToken: token.access_token,
     refreshToken: token.refresh_token,
@@ -34,6 +43,11 @@ export function storeTokens(token: Token): StoredTokens {
   if (typeof window !== "undefined") {
     window.localStorage.setItem(ACCESS_TOKEN_KEY, storedTokens.accessToken);
     window.localStorage.setItem(REFRESH_TOKEN_KEY, storedTokens.refreshToken);
+
+    if (userEmail) {
+      window.localStorage.setItem(USER_EMAIL_KEY, userEmail);
+    }
+
     emitAuthStorageChange();
   }
 
@@ -47,6 +61,7 @@ export function clearStoredTokens() {
 
   window.localStorage.removeItem(ACCESS_TOKEN_KEY);
   window.localStorage.removeItem(REFRESH_TOKEN_KEY);
+  window.localStorage.removeItem(USER_EMAIL_KEY);
   emitAuthStorageChange();
 }
 

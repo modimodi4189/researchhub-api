@@ -38,7 +38,8 @@ export function AuthForm({ mode }: AuthFormProps) {
   const [serverError, setServerError] = useState<string | null>(null);
   const isRegister = mode === "register";
   const nextParam = searchParams.get("next");
-  const nextPath = nextParam?.startsWith("/") ? nextParam : "/app";
+  const redirectReason = searchParams.get("reason");
+  const nextPath = getSafeNextPath(nextParam);
 
   const form = useForm<AuthFormValues>({
     resolver: zodResolver(authSchema),
@@ -122,6 +123,12 @@ export function AuthForm({ mode }: AuthFormProps) {
             </div>
           ) : null}
 
+          {!serverError && redirectReason === "auth_required" ? (
+            <div className="rounded-md border border-border bg-muted px-3 py-2 text-sm text-muted-foreground">
+              Sign in to continue to the protected workspace.
+            </div>
+          ) : null}
+
           <Button
             type="submit"
             className="h-9 w-full"
@@ -150,4 +157,12 @@ export function AuthForm({ mode }: AuthFormProps) {
       </CardContent>
     </Card>
   );
+}
+
+function getSafeNextPath(nextParam: string | null) {
+  if (!nextParam || !nextParam.startsWith("/") || nextParam.startsWith("//")) {
+    return "/app";
+  }
+
+  return nextParam;
 }

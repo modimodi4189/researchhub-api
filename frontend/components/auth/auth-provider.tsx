@@ -19,6 +19,7 @@ import {
   AUTH_STORAGE_EVENT,
   clearStoredTokens,
   getStoredTokens,
+  getStoredUserEmail,
   storeTokens,
   type StoredTokens,
 } from "@/lib/auth/storage";
@@ -33,6 +34,7 @@ type AuthContextValue = {
   register: (credentials: AuthCredentials) => Promise<void>;
   status: AuthStatus;
   tokens: StoredTokens | null;
+  userEmail: string | null;
 };
 
 const AuthContext = createContext<AuthContextValue | null>(null);
@@ -50,6 +52,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     getServerTokenSnapshot,
   );
   const tokens = useMemo(() => parseTokenSnapshot(tokenSnapshot), [tokenSnapshot]);
+  const userEmail = useMemo(() => parseUserEmailSnapshot(tokenSnapshot), [tokenSnapshot]);
   const status: AuthStatus = !hasHydrated
     ? "loading"
     : tokens
@@ -61,14 +64,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     router.push("/login");
   }, [router]);
 
-  const persistTokenPair = useCallback((tokenPair: Parameters<typeof storeTokens>[0]) => {
-    storeTokens(tokenPair);
+  const persistTokenPair = useCallback((tokenPair: Parameters<typeof storeTokens>[0], userEmail: string) => {
+    storeTokens(tokenPair, userEmail);
   }, []);
 
   const login = useCallback(
     async (credentials: AuthCredentials) => {
       const tokenPair = await loginUser(credentials);
-      persistTokenPair(tokenPair);
+      persistTokenPair(tokenPair, credentials.email);
     },
     [persistTokenPair],
   );
@@ -77,7 +80,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     async (credentials: AuthCredentials) => {
       await registerUser(credentials);
       const tokenPair = await loginUser(credentials);
-      persistTokenPair(tokenPair);
+      persistTokenPair(tokenPair, credentials.email);
     },
     [persistTokenPair],
   );
@@ -124,8 +127,9 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       register,
       status,
       tokens,
+      userEmail,
     }),
-    [apiRequest, getAccessToken, login, logout, register, status, tokens],
+    [apiRequest, getAccessToken, login, logout, register, status, tokens, userEmail],
   );
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
@@ -171,7 +175,7 @@ function getStoredTokenSnapshot() {
     return null;
   }
 
-  return `${tokens.accessToken}\n${tokens.refreshToken}`;
+  return `${tokens.accessToken}\n${tokens.refreshToken}\n${getStoredUserEmail() ?? ""}`;
 }
 
 function getServerTokenSnapshot() {
@@ -190,4 +194,13 @@ function parseTokenSnapshot(snapshot: string | null): StoredTokens | null {
   }
 
   return { accessToken, refreshToken };
+}
+
+function parseUserEmailSnapshot(snapshot: string | null): string | null {
+  if (!snapshot) {
+    return null;
+  }
+
+  const [, , userEmail] = snapshot.split("\n");
+  return userEmail || null;
 }

@@ -12,7 +12,9 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     if (status === "guest") {
-      router.replace(`/login?next=${encodeURIComponent(pathname)}`);
+      router.replace(
+        `/login?next=${encodeURIComponent(pathname)}&reason=auth_required`,
+      );
     }
   }, [pathname, router, status]);
 
@@ -21,7 +23,7 @@ export function ProtectedRoute({ children }: { children: React.ReactNode }) {
       <main className="flex min-h-screen items-center justify-center bg-canvas text-ink">
         <div className="flex items-center gap-3 rounded-md border border-border bg-surface px-4 py-3 text-sm text-muted-foreground">
           <Loader2 className="size-4 animate-spin" aria-hidden="true" />
-          Checking session
+          {status === "loading" ? "Checking session" : "Redirecting to sign in"}
         </div>
       </main>
     );

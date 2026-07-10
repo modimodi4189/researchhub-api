@@ -7,6 +7,7 @@ import {
   FolderKanban,
   Library,
   LogOut,
+  UserRound,
   Search,
   Settings,
   Sparkles,
@@ -15,6 +16,14 @@ import { useAuth } from "@/components/auth/auth-provider";
 import { ApiHealthStatus } from "@/components/api-health-status";
 import { PaperLibrary } from "@/components/papers/paper-library";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuLabel,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 
 const navigation = [
   { name: "Library", icon: Library, href: "/app" },
@@ -37,7 +46,7 @@ export function AppShell({
   subtitle = "Authenticated papers loaded from the backend API.",
   title = "Library",
 }: AppShellProps) {
-  const { logout } = useAuth();
+  const { logout, userEmail } = useAuth();
 
   return (
     <main className="min-h-screen bg-canvas text-ink">
@@ -97,10 +106,44 @@ export function AppShell({
               >
                 <Bell className="size-4" aria-hidden="true" />
               </Button>
-              <Button type="button" variant="outline" onClick={logout}>
-                <LogOut className="size-4" aria-hidden="true" />
-                Logout
-              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="h-9 gap-2 px-2.5"
+                    aria-label="Open account menu"
+                  >
+                    <span className="flex size-6 items-center justify-center rounded bg-primary-subtle text-primary">
+                      <UserRound className="size-3.5" aria-hidden="true" />
+                    </span>
+                    <span className="max-w-40 truncate text-xs font-medium">
+                      {userEmail ?? "Account"}
+                    </span>
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="w-56">
+                  <DropdownMenuLabel>
+                    <span className="block text-xs text-muted-foreground">
+                      Signed in as
+                    </span>
+                    <span className="block truncate text-sm font-medium text-foreground">
+                      {userEmail ?? "Local session"}
+                    </span>
+                  </DropdownMenuLabel>
+                  <DropdownMenuSeparator />
+                  <DropdownMenuItem
+                    variant="destructive"
+                    onSelect={(event) => {
+                      event.preventDefault();
+                      logout();
+                    }}
+                  >
+                    <LogOut className="size-4" aria-hidden="true" />
+                    Logout
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
             </div>
           </header>
 
