@@ -9,13 +9,16 @@ import {
   ChevronRight,
   FileText,
   Lock,
+  MoreHorizontal,
   Plus,
   RefreshCw,
   Rows3,
+  Trash2,
   Unlock,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/components/auth/auth-provider";
+import { ConfirmDeleteDialog } from "@/components/papers/confirm-delete-dialog";
 import { PaperForm } from "@/components/papers/paper-form";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -26,6 +29,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   isApiError,
@@ -120,6 +129,48 @@ export function PaperLibrary() {
     });
   }
 
+  async function handlePaperDeleted(paper: PaperListItem) {
+    try {
+      await apiRequest<void>(`/api/v1/papers/${paper.id}`, {
+        method: "DELETE",
+        responseType: "void",
+      });
+
+      setState((currentState) => {
+        if (currentState.status !== "success") {
+          return currentState;
+        }
+
+        const nextItems = currentState.data.items.filter(
+          (item) => item.id !== paper.id,
+        );
+        const nextTotal = Math.max(0, currentState.data.total - 1);
+        const nextPages = Math.ceil(nextTotal / currentState.data.limit);
+
+        return {
+          status: "success",
+          data: {
+            ...currentState.data,
+            items: nextItems,
+            total: nextTotal,
+            pages: nextPages,
+          },
+          error: null,
+        };
+      });
+
+      toast.success("Paper deleted", {
+        description: `${paper.title} was removed from your library.`,
+      });
+    } catch (error) {
+      const message = getPaperDeleteError(error);
+      toast.error("Could not delete paper", {
+        description: message,
+      });
+      throw error;
+    }
+  }
+
   return (
     <section
       id="library"
@@ -194,17 +245,22 @@ export function PaperLibrary() {
       {state.status === "success" && papers.length > 0 ? (
         <>
           <div className="overflow-hidden rounded-md border border-border bg-card">
-            <div className="grid grid-cols-[minmax(420px,1fr)_120px_126px_130px_96px] items-center border-b border-border bg-muted/60 px-4 py-2.5 text-xs font-medium uppercase tracking-[0.1em] text-muted-foreground">
+            <div className="grid grid-cols-[minmax(420px,1fr)_120px_126px_130px_96px_44px] items-center border-b border-border bg-muted/60 px-4 py-2.5 text-xs font-medium uppercase tracking-[0.1em] text-muted-foreground">
               <span>Paper</span>
               <span>Visibility</span>
               <span>Category</span>
               <span>Updated</span>
               <span className="text-right">ID</span>
+              <span className="sr-only">Actions</span>
             </div>
 
             <div className="divide-y divide-border">
               {papers.map((paper) => (
-                <PaperRow key={paper.id} paper={paper} />
+                <PaperRow
+                  key={paper.id}
+                  paper={paper}
+                  onDelete={handlePaperDeleted}
+                />
               ))}
             </div>
           </div>
@@ -226,84 +282,152 @@ export function PaperLibrary() {
   );
 }
 
-function PaperRow({ paper }: { paper: PaperListItem }) {
+function PaperRow({
+  onDelete,
+  paper,
+}: {
+  onDelete: (paper: PaperListItem) => Promise<void>;
+  paper: PaperListItem;
+}) {
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const preview = paper.abstract?.trim() || "No abstract provided.";
   const updatedAt = paper.updated_at ?? paper.created_at;
   const updatedLabel = formatDate(updatedAt);
 
+  async function handleConfirmDelete() {
+    setIsDeleting(true);
+    setDeleteError(null);
+
+    try {
+      await onDelete(paper);
+      setIsDeleteOpen(false);
+    } catch (error) {
+      setDeleteError(getPaperDeleteError(error));
+      throw error;
+    } finally {
+      setIsDeleting(false);
+    }
+  }
+
   return (
-    <Link
-      href={`/app/papers/${paper.id}`}
-      className="grid min-h-28 grid-cols-[minmax(420px,1fr)_120px_126px_130px_96px] items-center gap-0 px-4 py-3 transition hover:bg-muted/35 focus-visible:bg-muted/35 focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40"
-      aria-label={`Open ${paper.title}`}
-    >
-      <div className="min-w-0 pr-6">
-        <div className="flex items-center gap-2">
-          <FileText className="size-4 shrink-0 text-primary" aria-hidden="true" />
-          <h2 className="truncate text-sm font-semibold text-foreground">
-            {paper.title}
-          </h2>
+    <>
+      <div className="grid min-h-28 grid-cols-[minmax(420px,1fr)_120px_126px_130px_96px_44px] items-center gap-0 px-4 py-3 transition hover:bg-muted/35">
+        <div className="min-w-0 pr-6">
+          <div className="flex items-center gap-2">
+            <FileText
+              className="size-4 shrink-0 text-primary"
+              aria-hidden="true"
+            />
+            <Link
+              href={`/app/papers/${paper.id}`}
+              className="min-w-0 rounded-sm focus-visible:outline-none focus-visible:ring-3 focus-visible:ring-ring/40"
+              aria-label={`Open ${paper.title}`}
+            >
+              <h2 className="truncate text-sm font-semibold text-foreground hover:underline">
+                {paper.title}
+              </h2>
+            </Link>
+          </div>
+          <p className="mt-2 line-clamp-2 max-w-4xl text-sm leading-5 text-muted-foreground">
+            {preview}
+          </p>
+          <div className="mt-3 flex items-center gap-3 text-xs text-muted-foreground">
+            <span>Created {formatDate(paper.created_at)}</span>
+            <span aria-hidden="true">/</span>
+            <span>{paper.summary ? "Summary available" : "No summary"}</span>
+          </div>
         </div>
-        <p className="mt-2 line-clamp-2 max-w-4xl text-sm leading-5 text-muted-foreground">
-          {preview}
-        </p>
-        <div className="mt-3 flex items-center gap-3 text-xs text-muted-foreground">
-          <span>Created {formatDate(paper.created_at)}</span>
-          <span aria-hidden="true">/</span>
-          <span>{paper.summary ? "Summary available" : "No summary"}</span>
+
+        <div>
+          <Badge
+            variant="secondary"
+            className={cn(
+              "h-7 rounded-md px-2.5",
+              paper.is_public
+                ? "bg-primary-subtle text-accent-foreground"
+                : "bg-muted text-muted-foreground",
+            )}
+          >
+            {paper.is_public ? (
+              <Unlock className="size-3.5" aria-hidden="true" />
+            ) : (
+              <Lock className="size-3.5" aria-hidden="true" />
+            )}
+            {paper.is_public ? "Public" : "Private"}
+          </Badge>
+        </div>
+
+        <div className="text-sm text-muted-foreground">
+          {paper.category_id ? `#${paper.category_id}` : "Unassigned"}
+        </div>
+
+        <time className="text-sm text-muted-foreground" dateTime={updatedAt}>
+          {updatedLabel}
+        </time>
+
+        <div className="text-right font-mono text-xs text-muted-foreground">
+          {paper.id}
+        </div>
+
+        <div className="flex justify-end">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                type="button"
+                variant="ghost"
+                size="icon"
+                aria-label={`Actions for ${paper.title}`}
+              >
+                <MoreHorizontal className="size-4" aria-hidden="true" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-40">
+              <DropdownMenuItem
+                variant="destructive"
+                onSelect={(event) => {
+                  event.preventDefault();
+                  setIsDeleteOpen(true);
+                }}
+              >
+                <Trash2 className="size-4" aria-hidden="true" />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
         </div>
       </div>
 
-      <div>
-        <Badge
-          variant="secondary"
-          className={cn(
-            "h-7 rounded-md px-2.5",
-            paper.is_public
-              ? "bg-primary-subtle text-accent-foreground"
-              : "bg-muted text-muted-foreground",
-          )}
-        >
-          {paper.is_public ? (
-            <Unlock className="size-3.5" aria-hidden="true" />
-          ) : (
-            <Lock className="size-3.5" aria-hidden="true" />
-          )}
-          {paper.is_public ? "Public" : "Private"}
-        </Badge>
-      </div>
-
-      <div className="text-sm text-muted-foreground">
-        {paper.category_id ? `#${paper.category_id}` : "Unassigned"}
-      </div>
-
-      <time className="text-sm text-muted-foreground" dateTime={updatedAt}>
-        {updatedLabel}
-      </time>
-
-      <div className="text-right font-mono text-xs text-muted-foreground">
-        {paper.id}
-      </div>
-    </Link>
+      <ConfirmDeleteDialog
+        error={deleteError}
+        isDeleting={isDeleting}
+        open={isDeleteOpen}
+        paperTitle={paper.title}
+        onConfirm={handleConfirmDelete}
+        onOpenChange={setIsDeleteOpen}
+      />
+    </>
   );
 }
 
 function PaperLibrarySkeleton() {
   return (
     <div className="overflow-hidden rounded-md border border-border bg-card">
-      <div className="grid grid-cols-[minmax(420px,1fr)_120px_126px_130px_96px] border-b border-border bg-muted/60 px-4 py-2.5">
+      <div className="grid grid-cols-[minmax(420px,1fr)_120px_126px_130px_96px_44px] border-b border-border bg-muted/60 px-4 py-2.5">
         <Skeleton className="h-4 w-16" />
         <Skeleton className="h-4 w-20" />
         <Skeleton className="h-4 w-20" />
         <Skeleton className="h-4 w-16" />
         <Skeleton className="ml-auto h-4 w-8" />
+        <Skeleton className="ml-auto size-8" />
       </div>
 
       <div className="divide-y divide-border">
         {Array.from({ length: 6 }).map((_, index) => (
           <div
             key={index}
-            className="grid min-h-28 grid-cols-[minmax(420px,1fr)_120px_126px_130px_96px] items-center px-4 py-3"
+            className="grid min-h-28 grid-cols-[minmax(420px,1fr)_120px_126px_130px_96px_44px] items-center px-4 py-3"
           >
             <div className="space-y-3 pr-6">
               <Skeleton className="h-4 w-2/3" />
@@ -314,6 +438,7 @@ function PaperLibrarySkeleton() {
             <Skeleton className="h-4 w-16" />
             <Skeleton className="h-4 w-20" />
             <Skeleton className="ml-auto h-4 w-8" />
+            <Skeleton className="ml-auto size-8" />
           </div>
         ))}
       </div>
@@ -442,6 +567,30 @@ function getPaperLoadError(error: unknown) {
   }
 
   return "An unknown error occurred while requesting the paper library.";
+}
+
+function getPaperDeleteError(error: unknown) {
+  if (isApiError(error)) {
+    if (error.status === 401) {
+      return "Your session could not be verified. Log in again before deleting this paper.";
+    }
+
+    if (error.status === 403) {
+      return "You are not authorized to delete this paper.";
+    }
+
+    if (error.status === 404) {
+      return "The API could not find this paper. It may already be deleted.";
+    }
+
+    return `The API returned ${error.status}: ${error.message}`;
+  }
+
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return "An unknown error occurred while deleting the paper.";
 }
 
 function formatDate(value: string) {

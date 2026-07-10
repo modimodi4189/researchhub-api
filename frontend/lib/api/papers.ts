@@ -31,3 +31,11 @@ export function updatePaper(
     body: payload,
   });
 }
+
+export function deletePaper(paperId: number, options?: ApiFetchOptions) {
+  return apiFetch<void>(`/api/v1/papers/${paperId}`, {
+    ...options,
+    method: "DELETE",
+    responseType: "void",
+  });
+}

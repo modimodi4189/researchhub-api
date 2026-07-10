@@ -6,7 +6,7 @@ export { getApiBaseUrl } from "@/lib/api/config";
 export { ApiError, isApiError } from "@/lib/api/errors";
 export type { ApiErrorDetail } from "@/lib/api/errors";
 export { getHealth } from "@/lib/api/health";
-export { createPaper, updatePaper } from "@/lib/api/papers";
+export { createPaper, deletePaper, updatePaper } from "@/lib/api/papers";
 export type { PaperMutationPayload } from "@/lib/api/papers";
 export type {
   Collection,

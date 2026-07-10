@@ -3,6 +3,7 @@
 import type { ComponentType, ReactNode, SVGProps } from "react";
 import { useEffect, useMemo, useState } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import {
   AlertCircle,
   ArrowLeft,
@@ -13,10 +14,12 @@ import {
   Lock,
   RefreshCw,
   ScrollText,
+  Trash2,
   Unlock,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/components/auth/auth-provider";
+import { ConfirmDeleteDialog } from "@/components/papers/confirm-delete-dialog";
 import { PaperForm } from "@/components/papers/paper-form";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -108,7 +111,11 @@ function PaperDetailContent({
   paper: Paper;
 }) {
   const { apiRequest } = useAuth();
+  const router = useRouter();
   const [isEditOpen, setIsEditOpen] = useState(false);
+  const [isDeleteOpen, setIsDeleteOpen] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const updatedAt = paper.updated_at ?? paper.created_at;
   const dates = useMemo(
     () => [
@@ -131,6 +138,31 @@ function PaperDetailContent({
     toast.success("Paper updated", {
       description: `${nextPaper.title} has been saved.`,
     });
+  }
+
+  async function handlePaperDeleted() {
+    setIsDeleting(true);
+    setDeleteError(null);
+
+    try {
+      await apiRequest<void>(`/api/v1/papers/${paper.id}`, {
+        method: "DELETE",
+        responseType: "void",
+      });
+      toast.success("Paper deleted", {
+        description: `${paper.title} was removed from your library.`,
+      });
+      router.push("/app");
+    } catch (error) {
+      const message = getPaperDeleteError(error);
+      setDeleteError(message);
+      toast.error("Could not delete paper", {
+        description: message,
+      });
+      throw error;
+    } finally {
+      setIsDeleting(false);
+    }
   }
 
   return (
@@ -159,6 +191,15 @@ function PaperDetailContent({
               <Badge variant="outline" className="h-7 rounded-md px-2.5">
                 GET /api/v1/papers/{paper.id}
               </Badge>
+              <Button
+                type="button"
+                variant="outline"
+                className="text-muted-foreground hover:border-destructive/40 hover:bg-destructive/10 hover:text-destructive"
+                onClick={() => setIsDeleteOpen(true)}
+              >
+                <Trash2 className="size-4" aria-hidden="true" />
+                Delete
+              </Button>
               <Button type="button" onClick={() => setIsEditOpen(true)}>
                 <Edit3 className="size-4" aria-hidden="true" />
                 Edit
@@ -211,6 +252,15 @@ function PaperDetailContent({
           />
         </DialogContent>
       </Dialog>
+
+      <ConfirmDeleteDialog
+        error={deleteError}
+        isDeleting={isDeleting}
+        open={isDeleteOpen}
+        paperTitle={paper.title}
+        onConfirm={handlePaperDeleted}
+        onOpenChange={setIsDeleteOpen}
+      />
 
       <div className="grid grid-cols-[minmax(0,0.9fr)_minmax(520px,1.4fr)] gap-5">
         <div className="flex min-w-0 flex-col gap-5">
@@ -398,6 +448,30 @@ function getPaperLoadError(error: unknown) {
   }
 
   return "An unknown error occurred while requesting the paper.";
+}
+
+function getPaperDeleteError(error: unknown) {
+  if (isApiError(error)) {
+    if (error.status === 401) {
+      return "Your session could not be verified. Log in again before deleting this paper.";
+    }
+
+    if (error.status === 403) {
+      return "You are not authorized to delete this paper.";
+    }
+
+    if (error.status === 404) {
+      return "The API could not find this paper. It may already be deleted.";
+    }
+
+    return `The API returned ${error.status}: ${error.message}`;
+  }
+
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return "An unknown error occurred while deleting the paper.";
 }
 
 function formatDate(value: string) {
