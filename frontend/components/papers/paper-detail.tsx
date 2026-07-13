@@ -7,6 +7,7 @@ import { useRouter } from "next/navigation";
 import {
   AlertCircle,
   ArrowLeft,
+  BrainCircuit,
   CalendarDays,
   Edit3,
   FileText,
@@ -14,11 +15,16 @@ import {
   Lock,
   RefreshCw,
   ScrollText,
+  Tags,
   Trash2,
   Unlock,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useAuth } from "@/components/auth/auth-provider";
+import {
+  AiActionButton,
+  type AiActionStatus,
+} from "@/components/papers/ai-action-button";
 import { ConfirmDeleteDialog } from "@/components/papers/confirm-delete-dialog";
 import { PaperForm } from "@/components/papers/paper-form";
 import { Badge } from "@/components/ui/badge";
@@ -38,6 +44,13 @@ type DetailState =
   | { status: "loading"; data: null; error: null }
   | { status: "success"; data: Paper; error: null }
   | { status: "error"; data: null; error: string };
+
+type PaperAiAction = "summarize" | "classify";
+
+type PaperAiActionState = {
+  error: string | null;
+  status: AiActionStatus;
+};
 
 export function PaperDetail({ paperId }: { paperId: string }) {
   const { apiRequest } = useAuth();
@@ -116,6 +129,12 @@ function PaperDetailContent({
   const [isDeleteOpen, setIsDeleteOpen] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [aiActions, setAiActions] = useState<
+    Record<PaperAiAction, PaperAiActionState>
+  >({
+    summarize: { status: "idle", error: null },
+    classify: { status: "idle", error: null },
+  });
   const updatedAt = paper.updated_at ?? paper.created_at;
   const dates = useMemo(
     () => [
@@ -138,6 +157,45 @@ function PaperDetailContent({
     toast.success("Paper updated", {
       description: `${nextPaper.title} has been saved.`,
     });
+  }
+
+  async function handleAiAction(action: PaperAiAction) {
+    const config = getPaperAiActionConfig(action);
+
+    setAiActions((current) => ({
+      ...current,
+      [action]: { status: "loading", error: null },
+    }));
+
+    try {
+      const updatedPaper = await apiRequest<Paper>(
+        `/api/v1/papers/${paper.id}/${config.path}`,
+        { method: "POST" },
+      );
+      onPaperUpdated(updatedPaper);
+
+      const refreshedPaper = await apiRequest<Paper>(
+        `/api/v1/papers/${paper.id}`,
+      );
+      onPaperUpdated(refreshedPaper);
+
+      setAiActions((current) => ({
+        ...current,
+        [action]: { status: "success", error: null },
+      }));
+      toast.success(config.toastTitle, {
+        description: config.toastDescription,
+      });
+    } catch (error) {
+      const message = getPaperAiActionError(error, action);
+      setAiActions((current) => ({
+        ...current,
+        [action]: { status: "error", error: message },
+      }));
+      toast.error(config.errorTitle, {
+        description: message,
+      });
+    }
   }
 
   async function handlePaperDeleted() {
@@ -232,6 +290,43 @@ function PaperDetailContent({
             />
           ))}
         </div>
+
+        <section className="mt-5">
+          <div className="mb-3 flex items-center justify-between gap-4">
+            <div>
+              <h2 className="text-sm font-semibold">AI Actions</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Backend AI operations with paper refresh on completion.
+              </p>
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <AiActionButton
+              description="Generate a saved summary from the paper content."
+              endpointLabel="POST /summarize"
+              error={aiActions.summarize.error}
+              icon={BrainCircuit}
+              loadingLabel="Generating summary and refreshing this paper..."
+              status={aiActions.summarize.status}
+              successMessage="Summary generated and paper refreshed."
+              title="Summarize"
+              disabled={isAnyAiActionLoading(aiActions)}
+              onClick={() => handleAiAction("summarize")}
+            />
+            <AiActionButton
+              description="Classify the paper and assign the matching category."
+              endpointLabel="POST /classify"
+              error={aiActions.classify.error}
+              icon={Tags}
+              loadingLabel="Classifying paper and refreshing this paper..."
+              status={aiActions.classify.status}
+              successMessage="Classification saved and paper refreshed."
+              title="Classify"
+              disabled={isAnyAiActionLoading(aiActions)}
+              onClick={() => handleAiAction("classify")}
+            />
+          </div>
+        </section>
       </div>
 
       <Dialog open={isEditOpen} onOpenChange={setIsEditOpen}>
@@ -472,6 +567,64 @@ function getPaperDeleteError(error: unknown) {
   }
 
   return "An unknown error occurred while deleting the paper.";
+}
+
+function getPaperAiActionConfig(action: PaperAiAction) {
+  if (action === "summarize") {
+    return {
+      errorTitle: "Could not summarize paper",
+      path: "summarize",
+      toastDescription: "The detail view has been refreshed with the latest paper data.",
+      toastTitle: "Summary generated",
+    };
+  }
+
+  return {
+    errorTitle: "Could not classify paper",
+    path: "classify",
+    toastDescription: "The detail view has been refreshed with the latest paper data.",
+    toastTitle: "Paper classified",
+  };
+}
+
+function getPaperAiActionError(error: unknown, action: PaperAiAction) {
+  const actionLabel = action === "summarize" ? "summarizing" : "classifying";
+
+  if (isApiError(error)) {
+    if (error.status === 401) {
+      return `Your session could not be verified. Log in again before ${actionLabel} this paper.`;
+    }
+
+    if (error.status === 403) {
+      return `You are not authorized to ${action} this paper.`;
+    }
+
+    if (error.status === 404) {
+      return "The API could not find this paper.";
+    }
+
+    if (error.status === 422) {
+      return error.message;
+    }
+
+    if (error.status === 503) {
+      return `The AI service could not finish ${actionLabel} this paper. Try again in a moment.`;
+    }
+
+    return `The API returned ${error.status}: ${error.message}`;
+  }
+
+  if (error instanceof Error) {
+    return error.message;
+  }
+
+  return `An unknown error occurred while ${actionLabel} the paper.`;
+}
+
+function isAnyAiActionLoading(
+  actions: Record<PaperAiAction, PaperAiActionState>,
+) {
+  return Object.values(actions).some((action) => action.status === "loading");
 }
 
 function formatDate(value: string) {
