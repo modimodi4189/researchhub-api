@@ -27,7 +27,7 @@ import {
 
 const navigation = [
   { name: "Library", icon: Library, href: "/app" },
-  { name: "Search", icon: Search },
+  { name: "Search", icon: Search, href: "/app/search" },
   { name: "Collections", icon: FolderKanban },
   { name: "Public Papers", icon: Compass },
   { name: "Settings", icon: Settings },

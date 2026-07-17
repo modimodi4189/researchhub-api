@@ -134,6 +134,8 @@ class PaperResponse(BaseModel):
     abstract: Optional[str]
     content: Optional[str]
     summary: Optional[str]
+    summary_status: str
+    summary_error: Optional[str]
     is_public: bool
     created_at: datetime
     updated_at: Optional[datetime]
@@ -150,6 +152,8 @@ class PaperListResponse(BaseModel):
     title: str
     abstract: Optional[str]
     summary: Optional[str]
+    summary_status: str
+    summary_error: Optional[str]
     is_public: bool
     created_at: datetime
     updated_at: Optional[datetime]

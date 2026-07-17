@@ -14,6 +14,7 @@ services:
       - REDIS_URL=redis://redis:6379/0
       - CORS_ORIGINS=["http://localhost:3000"]
       - FAISS_INDEX_DIR=/app/ml_artifacts
+      - HF_HOME=/app/.cache/huggingface
     depends_on:
       postgres:
         condition: service_healthy
@@ -23,6 +24,7 @@ services:
         condition: service_completed_successfully
     volumes:
       - ml_artifacts:/app/ml_artifacts
+      - huggingface_cache:/app/.cache/huggingface
     command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2
 
   migrate:
@@ -72,6 +74,7 @@ services:
       - SECRET_KEY=${SECRET_KEY:?Set SECRET_KEY in .env}
       - REDIS_URL=redis://redis:6379/0
       - FAISS_INDEX_DIR=/app/ml_artifacts
+      - HF_HOME=/app/.cache/huggingface
       - DEBUG=False
     depends_on:
       postgres:
@@ -82,7 +85,9 @@ services:
         condition: service_completed_successfully
     volumes:
       - ml_artifacts:/app/ml_artifacts
+      - huggingface_cache:/app/.cache/huggingface
 
 volumes:
   postgres_data:
   ml_artifacts:
+  huggingface_cache:

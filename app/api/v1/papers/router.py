@@ -1,4 +1,5 @@
 import asyncio
+
 from fastapi import APIRouter, Depends, HTTPException, status, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import select, func
@@ -8,12 +9,12 @@ from app.core.logging import logger
 from app.db.database import get_db
 from app.db.models import Paper, User, Category
 from app.ml.classifier import classify_paper
-from app.ml.summarizer import summarize_text
 from app.schemas.schemas import PaperCreate, PaperUpdate, PaperResponse, PaperListResponse, PaginationResponse
 from app.api.deps import get_current_user
 from app.tasks.processing import (
     process_paper,
     remove_paper_from_index_task,
+    summarize_paper_task,
     update_paper_index_task,
 )
 
@@ -187,7 +188,11 @@ async def delete_paper(
     logger.info(f"User {current_user.id} deleted paper {paper_id}")
 
 
-@router.post("/{paper_id}/summarize", response_model=PaperResponse)
+@router.post(
+    "/{paper_id}/summarize",
+    response_model=PaperResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
 async def summarize_paper(
     paper_id: int,
     db: AsyncSession = Depends(get_db),
@@ -202,22 +207,20 @@ async def summarize_paper(
         raise HTTPException(status_code=403, detail="Not authorized")
     if not paper.content:
         raise HTTPException(status_code=422, detail="Paper has no content to summarize")
-
-    loop = asyncio.get_running_loop()
-    try:
-        summary = await loop.run_in_executor(ml_executor, summarize_text, paper.content)
-    except Exception as exc:
-        logger.exception(f"Failed to generate summary for paper {paper_id}")
+    if paper.summary_status in {"queued", "processing"}:
         raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Summary generation failed",
-        ) from exc
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Summary generation is already in progress",
+        )
 
-    paper.summary = summary
+    paper.summary_status = "queued"
+    paper.summary_error = None
     await db.commit()
     await db.refresh(paper)
 
-    logger.info(f"Generated summary for paper {paper_id}")
+    summarize_paper_task.delay(paper.id)
+
+    logger.info(f"Queued summary generation for paper {paper_id}")
     return paper
 
 

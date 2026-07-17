@@ -40,6 +40,9 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { isApiError, type Paper, type PaperMutationPayload } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
+const SUMMARY_POLL_INTERVAL_MS = 3000;
+const SUMMARY_POLL_ATTEMPTS = 120;
+
 type DetailState =
   | { status: "loading"; data: null; error: null }
   | { status: "success"; data: Paper; error: null }
@@ -136,6 +139,8 @@ function PaperDetailContent({
     classify: { status: "idle", error: null },
   });
   const updatedAt = paper.updated_at ?? paper.created_at;
+  const isSummaryInProgress =
+    paper.summary_status === "queued" || paper.summary_status === "processing";
   const dates = useMemo(
     () => [
       { label: "Created", value: paper.created_at },
@@ -160,6 +165,11 @@ function PaperDetailContent({
   }
 
   async function handleAiAction(action: PaperAiAction) {
+    if (action === "summarize") {
+      await handleSummarizePaper();
+      return;
+    }
+
     const config = getPaperAiActionConfig(action);
 
     setAiActions((current) => ({
@@ -196,6 +206,67 @@ function PaperDetailContent({
         description: message,
       });
     }
+  }
+
+  async function handleSummarizePaper() {
+    const config = getPaperAiActionConfig("summarize");
+
+    setAiActions((current) => ({
+      ...current,
+      summarize: { status: "loading", error: null },
+    }));
+
+    try {
+      const queuedPaper = await apiRequest<Paper>(
+        `/api/v1/papers/${paper.id}/${config.path}`,
+        { method: "POST" },
+      );
+      onPaperUpdated(queuedPaper);
+
+      const summarizedPaper = await waitForSummary();
+      onPaperUpdated(summarizedPaper);
+
+      setAiActions((current) => ({
+        ...current,
+        summarize: { status: "success", error: null },
+      }));
+      toast.success(config.toastTitle, {
+        description: config.toastDescription,
+      });
+    } catch (error) {
+      const message = getPaperAiActionError(error, "summarize");
+      setAiActions((current) => ({
+        ...current,
+        summarize: { status: "error", error: message },
+      }));
+      toast.error(config.errorTitle, {
+        description: message,
+      });
+    }
+  }
+
+  async function waitForSummary() {
+    for (let attempt = 0; attempt < SUMMARY_POLL_ATTEMPTS; attempt += 1) {
+      await sleep(SUMMARY_POLL_INTERVAL_MS);
+
+      const nextPaper = await apiRequest<Paper>(`/api/v1/papers/${paper.id}`);
+      onPaperUpdated(nextPaper);
+
+      if (nextPaper.summary_status === "complete") {
+        return nextPaper;
+      }
+
+      if (nextPaper.summary_status === "failed") {
+        throw new Error(
+          nextPaper.summary_error ||
+            "Summary generation failed in the background worker.",
+        );
+      }
+    }
+
+    throw new Error(
+      "Summary generation is still processing. Refresh this paper in a few minutes.",
+    );
   }
 
   async function handlePaperDeleted() {
@@ -306,11 +377,13 @@ function PaperDetailContent({
               endpointLabel="POST /summarize"
               error={aiActions.summarize.error}
               icon={BrainCircuit}
-              loadingLabel="Generating summary and refreshing this paper..."
-              status={aiActions.summarize.status}
+              loadingLabel="Summary queued. This can take several minutes the first time..."
+              status={
+                isSummaryInProgress ? "loading" : aiActions.summarize.status
+              }
               successMessage="Summary generated and paper refreshed."
               title="Summarize"
-              disabled={isAnyAiActionLoading(aiActions)}
+              disabled={isAnyAiActionLoading(aiActions) || isSummaryInProgress}
               onClick={() => handleAiAction("summarize")}
             />
             <AiActionButton
@@ -364,6 +437,7 @@ function PaperDetailContent({
           </ReaderSection>
 
           <ReaderSection title="Summary">
+            <SummaryStatus paper={paper} />
             <ReadableText value={paper.summary} empty="No summary available." />
           </ReaderSection>
         </div>
@@ -621,10 +695,58 @@ function getPaperAiActionError(error: unknown, action: PaperAiAction) {
   return `An unknown error occurred while ${actionLabel} the paper.`;
 }
 
+function SummaryStatus({ paper }: { paper: Paper }) {
+  if (paper.summary_status === "idle" && !paper.summary_error) {
+    return null;
+  }
+
+  const statusLabel = getSummaryStatusLabel(paper);
+
+  return (
+    <div
+      className={cn(
+        "mb-3 rounded-md border px-3 py-2 text-sm",
+        paper.summary_status === "failed"
+          ? "border-destructive/30 bg-destructive/5 text-destructive"
+          : "border-border bg-muted/50 text-muted-foreground",
+      )}
+    >
+      <span className="font-medium">{statusLabel}</span>
+      {paper.summary_error ? <span> {paper.summary_error}</span> : null}
+    </div>
+  );
+}
+
+function getSummaryStatusLabel(paper: Paper) {
+  if (paper.summary_status === "queued") {
+    return "Summary queued.";
+  }
+
+  if (paper.summary_status === "processing") {
+    return "Summary processing.";
+  }
+
+  if (paper.summary_status === "complete") {
+    return "Summary complete.";
+  }
+
+  if (paper.summary_status === "failed") {
+    return "Summary failed.";
+  }
+
+  return `Summary status: ${paper.summary_status}.`;
+}
+
 function isAnyAiActionLoading(
   actions: Record<PaperAiAction, PaperAiActionState>,
 ) {
   return Object.values(actions).some((action) => action.status === "loading");
+}
+
+function sleep(durationMs: number) {
+  return new Promise((resolve) => {
+    window.setTimeout(resolve, durationMs);
+  });
 }
 
 function formatDate(value: string) {

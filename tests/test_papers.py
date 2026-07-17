@@ -4,6 +4,7 @@ from unittest.mock import MagicMock
 
 import pytest
 
+from app.db.models import Paper
 from app.schemas.schemas import (
     PAPER_ABSTRACT_MAX_LENGTH,
     PAPER_CONTENT_MAX_LENGTH,
@@ -33,6 +34,8 @@ async def test_create_paper_success(auth_client):
     assert "created_at" in data
     assert "updated_at" in data
     assert "summary" in data
+    assert data["summary_status"] == "idle"
+    assert data["summary_error"] is None
 
 
 async def test_create_paper_requires_auth(client):
@@ -274,39 +277,86 @@ async def test_delete_paper_not_owner(client, created_paper):
 # Summarize
 # ---------------------------------------------------------------------------
 
-async def test_summarize_paper(auth_client, created_paper):
-    client, _ = auth_client
-    r = await client.post(f"/api/v1/papers/{created_paper['id']}/summarize")
-    assert r.status_code == 200
-    data = r.json()
-    assert data["summary"] == "Mocked summary."
-
-
-async def test_summarize_paper_failure_does_not_update_summary(
+async def test_summarize_paper_queues_background_task(
     auth_client, created_paper, monkeypatch
 ):
     client, _ = auth_client
-    paper_id = created_paper["id"]
+    summarize_mock = MagicMock()
+    monkeypatch.setattr(
+        "app.api.v1.papers.router.summarize_paper_task.delay",
+        summarize_mock,
+    )
 
-    first_response = await client.post(f"/api/v1/papers/{paper_id}/summarize")
-    assert first_response.status_code == 200
-    original_summary = first_response.json()["summary"]
+    r = await client.post(f"/api/v1/papers/{created_paper['id']}/summarize")
+    assert r.status_code == 202
+    data = r.json()
+    assert data["summary"] is None
+    assert data["summary_status"] == "queued"
+    assert data["summary_error"] is None
+    summarize_mock.assert_called_once_with(created_paper["id"])
+
+
+async def test_summarize_paper_rejects_duplicate_active_task(
+    auth_client, created_paper, monkeypatch, test_sessionmaker
+):
+    client, _ = auth_client
+    summarize_mock = MagicMock()
+    monkeypatch.setattr(
+        "app.api.v1.papers.router.summarize_paper_task.delay",
+        summarize_mock,
+    )
+
+    async with test_sessionmaker() as db:
+        paper = await db.get(Paper, created_paper["id"])
+        paper.summary_status = "processing"
+        await db.commit()
+
+    r = await client.post(f"/api/v1/papers/{created_paper['id']}/summarize")
+
+    assert r.status_code == 409
+    assert r.json()["detail"] == "Summary generation is already in progress"
+    summarize_mock.assert_not_called()
+
+
+async def test_summarize_task_persists_summary(
+    auth_client, created_paper, monkeypatch, test_sessionmaker
+):
+    from app.tasks.processing import _summarize_paper_async
+
+    monkeypatch.setattr("app.tasks.processing.AsyncSessionLocal", test_sessionmaker)
+
+    await _summarize_paper_async(created_paper["id"])
+
+    async with test_sessionmaker() as db:
+        paper = await db.get(Paper, created_paper["id"])
+
+    assert paper.summary == "Mocked summary."
+    assert paper.summary_status == "complete"
+    assert paper.summary_error is None
+
+
+async def test_summarize_task_failure_marks_failed_status(
+    auth_client, created_paper, monkeypatch, test_sessionmaker
+):
+    client, _ = auth_client
+    from app.tasks.processing import _summarize_paper_async
+
+    paper_id = created_paper["id"]
 
     def fail_summarization(text):
         raise RuntimeError("summarizer unavailable")
 
-    monkeypatch.setattr(
-        "app.api.v1.papers.router.summarize_text",
-        fail_summarization,
-    )
+    monkeypatch.setattr("app.tasks.processing.AsyncSessionLocal", test_sessionmaker)
+    monkeypatch.setattr("app.tasks.processing.summarize_text", fail_summarization)
 
-    r = await client.post(f"/api/v1/papers/{paper_id}/summarize")
-    assert r.status_code == 503
-    assert r.json()["detail"] == "Summary generation failed"
+    await _summarize_paper_async(paper_id)
 
     persisted = await client.get(f"/api/v1/papers/{paper_id}")
     assert persisted.status_code == 200
-    assert persisted.json()["summary"] == original_summary
+    data = persisted.json()
+    assert data["summary"] is None
+    assert data["summary_status"] == "failed"
+    assert "summarizer unavailable" in data["summary_error"]
 
 
 async def test_summarize_paper_no_content(auth_client):

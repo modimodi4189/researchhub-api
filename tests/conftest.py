@@ -96,6 +96,11 @@ _test_engine = create_async_engine(TEST_DB_URL, echo=False, poolclass=NullPool)
 _TestSession = async_sessionmaker(_test_engine, class_=AsyncSession, expire_on_commit=False)
 
 
+@pytest.fixture
+def test_sessionmaker():
+    return _TestSession
+
+
 async def _override_get_db():
     async with _TestSession() as session:
         try:
@@ -152,6 +157,7 @@ def _mock_celery(monkeypatch):
     mock = MagicMock()
     monkeypatch.setattr("app.tasks.processing.process_paper.delay", mock)
     monkeypatch.setattr("app.tasks.processing.remove_paper_from_index_task.delay", mock)
+    monkeypatch.setattr("app.tasks.processing.summarize_paper_task.delay", mock)
     monkeypatch.setattr("app.tasks.processing.update_paper_index_task.delay", mock)
     return mock
 
@@ -171,10 +177,7 @@ def _mock_refresh_token_store(monkeypatch):
 # ---------------------------------------------------------------------------
 @pytest.fixture(autouse=True)
 def _mock_ml(monkeypatch):
-    monkeypatch.setattr(
-        "app.api.v1.papers.router.summarize_text",
-        lambda text: "Mocked summary.",
-    )
+    monkeypatch.setattr("app.tasks.processing.summarize_text", lambda text: "Mocked summary.")
     monkeypatch.setattr(
         "app.api.v1.papers.router.classify_paper",
         lambda text: {"category": "machine learning", "confidence": 0.95},

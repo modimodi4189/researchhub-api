@@ -15,7 +15,7 @@ COPY alembic.ini README.md .env.example ./
 
 RUN addgroup --system app && \
     adduser --system --ingroup app --home /app app && \
-    mkdir -p logs ml_artifacts && \
+    mkdir -p logs ml_artifacts /app/.cache/huggingface && \
     chown -R app:app /app
 
 USER app

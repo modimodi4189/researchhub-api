@@ -8,6 +8,8 @@ export type { ApiErrorDetail } from "@/lib/api/errors";
 export { getHealth } from "@/lib/api/health";
 export { createPaper, deletePaper, updatePaper } from "@/lib/api/papers";
 export type { PaperMutationPayload } from "@/lib/api/papers";
+export { searchPapers } from "@/lib/api/search";
+export type { SearchPapersParams, SearchScope } from "@/lib/api/search";
 export type {
   Collection,
   HealthResponse,

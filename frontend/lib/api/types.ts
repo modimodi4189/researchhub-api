@@ -18,6 +18,8 @@ export type Paper = {
   abstract: string | null;
   content: string | null;
   summary: string | null;
+  summary_status: "idle" | "queued" | "processing" | "complete" | "failed" | string;
+  summary_error: string | null;
   is_public: boolean;
   created_at: IsoDateString;
   updated_at: IsoDateString | null;
