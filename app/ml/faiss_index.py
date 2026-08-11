@@ -1,7 +1,8 @@
-import faiss
-import numpy as np
 import json
 from pathlib import Path
+
+import faiss
+import numpy as np
 
 
 def create_index(dimension: int = 384) -> faiss.IndexIDMap:

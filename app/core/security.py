@@ -1,5 +1,4 @@
-from datetime import datetime, timedelta, timezone
-from typing import Optional
+from datetime import UTC, datetime, timedelta
 from uuid import uuid4
 
 from jose import JWTError, jwt
@@ -20,19 +19,19 @@ def get_password_hash(password: str) -> str:
 
 def create_access_token(data: dict) -> str:
     to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+    expire = datetime.now(UTC) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     to_encode.update({"exp": expire, "type": "access"})
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
-def create_refresh_token(data: dict, jti: Optional[str] = None) -> str:
+def create_refresh_token(data: dict, jti: str | None = None) -> str:
     to_encode = data.copy()
-    expire = datetime.now(timezone.utc) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
+    expire = datetime.now(UTC) + timedelta(days=settings.REFRESH_TOKEN_EXPIRE_DAYS)
     to_encode.update({"exp": expire, "type": "refresh", "jti": jti or str(uuid4())})
     return jwt.encode(to_encode, settings.SECRET_KEY, algorithm=settings.ALGORITHM)
 
 
-def decode_token_payload(token: str, token_type: str = "access") -> Optional[dict]:
+def decode_token_payload(token: str, token_type: str = "access") -> dict | None:
     """
     Decode and validate a JWT. Returns the payload on success, None on any failure.
     Expiry is always enforced.
@@ -48,7 +47,7 @@ def decode_token_payload(token: str, token_type: str = "access") -> Optional[dic
         return None
 
 
-def decode_token(token: str, token_type: str = "access") -> Optional[int]:
+def decode_token(token: str, token_type: str = "access") -> int | None:
     """
     Decode and validate a JWT. Returns the user_id (int) on success, None on any failure.
     Expiry is always enforced -- use create_refresh_token for long-lived tokens.

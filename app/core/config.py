@@ -1,4 +1,3 @@
-from typing import List
 
 from pydantic import Field, field_validator, model_validator
 from pydantic_settings import BaseSettings
@@ -13,7 +12,7 @@ class Settings(BaseSettings):
     APP_NAME: str = "ResearchHub API"
     DEBUG: bool = False
     REDIS_URL: str = "redis://localhost:6379/0"
-    CORS_ORIGINS: List[str] = Field(
+    CORS_ORIGINS: list[str] = Field(
         default_factory=lambda: ["http://localhost:3000", "http://localhost:8000"]
     )
     FAISS_INDEX_DIR: str = "ml_artifacts"

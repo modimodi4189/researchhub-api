@@ -17,11 +17,12 @@ from unittest.mock import MagicMock
 
 import pytest
 import pytest_asyncio
-from alembic import command
 from alembic.config import Config
 from sqlalchemy import text
+from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker, create_async_engine
 from sqlalchemy.pool import NullPool
-from sqlalchemy.ext.asyncio import create_async_engine, async_sessionmaker, AsyncSession
+
+from alembic import command
 
 # ---------------------------------------------------------------------------
 # Ensure logs/ directory exists before the app is imported.
@@ -46,10 +47,10 @@ os.environ["SECRET_KEY"] = "test-secret-key-not-for-production"
 os.environ["DEBUG"] = "False"
 os.environ["REDIS_URL"] = "redis://localhost:6379/0"
 
-from app.main import app  # noqa: E402
-from app.db.models import Base  # noqa: E402
-from app.core.limiter import limiter  # noqa: E402
-from app.db.database import get_db  # noqa: E402
+from app.core.limiter import limiter
+from app.db.database import get_db
+from app.db.models import Base
+from app.main import app
 
 PROJECT_ROOT = Path(__file__).resolve().parents[1]
 
@@ -197,7 +198,7 @@ def _mock_ml(monkeypatch):
 # ---------------------------------------------------------------------------
 @pytest_asyncio.fixture
 async def client():
-    from httpx import AsyncClient, ASGITransport
+    from httpx import ASGITransport, AsyncClient
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as ac:
         yield ac
 

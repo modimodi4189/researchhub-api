@@ -1,3 +1,5 @@
+import asyncio
+
 from app.celery import celery_app
 from app.core.logging import logger
 from app.db.database import AsyncSessionLocal
@@ -8,8 +10,6 @@ from app.ml.index_manager import (
     update_paper_in_index,
 )
 from app.ml.summarizer import summarize_text
-
-import asyncio
 
 
 @celery_app.task(name="process_paper")
@@ -97,7 +97,7 @@ async def _summarize_paper_async(paper_id: int):
 
         try:
             summary = summarize_text(paper.content or "")
-        except Exception as exc:
+        except (OSError, RuntimeError, ValueError) as exc:
             paper.summary_status = "failed"
             paper.summary_error = str(exc)[:1000]
             await db.commit()

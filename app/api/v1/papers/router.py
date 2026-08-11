@@ -1,17 +1,23 @@
 import asyncio
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 
+from app.api.deps import get_current_user
 from app.core.executor import ml_executor
 from app.core.logging import logger
 from app.db.database import get_db
-from app.db.models import Paper, User, Category
+from app.db.models import Category, Paper, User
 from app.ml.classifier import DEFAULT_CATEGORIES, classify_paper
-from app.schemas.schemas import PaperCreate, PaperUpdate, PaperResponse, PaperListResponse, PaginationResponse
-from app.api.deps import get_current_user
+from app.schemas.schemas import (
+    PaginationResponse,
+    PaperCreate,
+    PaperListResponse,
+    PaperResponse,
+    PaperUpdate,
+)
 from app.tasks.processing import (
     process_paper,
     remove_paper_from_index_task,

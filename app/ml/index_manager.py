@@ -1,15 +1,15 @@
 from pathlib import Path
 
 from app.core.config import settings
-from app.ml.faiss_index import (
-    create_index,
-    add_to_index,
-    remove_from_index,
-    search_index,
-    save_index,
-    load_index,
-)
 from app.ml.embeddings import generate_embedding
+from app.ml.faiss_index import (
+    add_to_index,
+    create_index,
+    load_index,
+    remove_from_index,
+    save_index,
+    search_index,
+)
 
 INDEX_DIR = Path(settings.FAISS_INDEX_DIR)
 INDEX_DIR.mkdir(parents=True, exist_ok=True)

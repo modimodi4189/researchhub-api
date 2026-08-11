@@ -1,6 +1,7 @@
 from datetime import datetime
-from typing import List, Optional, TypeVar, Generic
-from pydantic import BaseModel, EmailStr, ConfigDict, Field, field_validator
+from typing import Generic, TypeVar
+
+from pydantic import BaseModel, ConfigDict, EmailStr, Field, field_validator
 
 T = TypeVar("T")
 
@@ -11,7 +12,7 @@ COLLECTION_NAME_MAX_LENGTH = 255
 
 
 class PaginationResponse(BaseModel, Generic[T]):
-    items: List[T]
+    items: list[T]
     total: int
     page: int
     limit: int
@@ -81,17 +82,17 @@ class RefreshRequest(BaseModel):
 class CategoryResponse(BaseModel):
     id: int
     name: str
-    description: Optional[str]
+    description: str | None
 
     model_config = ConfigDict(from_attributes=True)
 
 
 class PaperCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=PAPER_TITLE_MAX_LENGTH)
-    abstract: Optional[str] = Field(None, max_length=PAPER_ABSTRACT_MAX_LENGTH)
-    content: Optional[str] = Field(None, max_length=PAPER_CONTENT_MAX_LENGTH)
+    abstract: str | None = Field(None, max_length=PAPER_ABSTRACT_MAX_LENGTH)
+    content: str | None = Field(None, max_length=PAPER_CONTENT_MAX_LENGTH)
     is_public: bool = False
-    category_id: Optional[int] = None
+    category_id: int | None = None
 
     @field_validator("title")
     @classmethod
@@ -116,15 +117,15 @@ class PaperCreate(BaseModel):
 
 
 class PaperUpdate(BaseModel):
-    title: Optional[str] = Field(None, min_length=1, max_length=PAPER_TITLE_MAX_LENGTH)
-    abstract: Optional[str] = Field(None, max_length=PAPER_ABSTRACT_MAX_LENGTH)
-    content: Optional[str] = Field(None, max_length=PAPER_CONTENT_MAX_LENGTH)
-    is_public: Optional[bool] = None
-    category_id: Optional[int] = None
+    title: str | None = Field(None, min_length=1, max_length=PAPER_TITLE_MAX_LENGTH)
+    abstract: str | None = Field(None, max_length=PAPER_ABSTRACT_MAX_LENGTH)
+    content: str | None = Field(None, max_length=PAPER_CONTENT_MAX_LENGTH)
+    is_public: bool | None = None
+    category_id: int | None = None
 
     @field_validator("title")
     @classmethod
-    def title_must_not_be_blank(cls, value: Optional[str]) -> Optional[str]:
+    def title_must_not_be_blank(cls, value: str | None) -> str | None:
         if value is not None and not value.strip():
             raise ValueError("Title must not be blank")
         return value
@@ -139,17 +140,17 @@ class PaperUpdate(BaseModel):
 class PaperResponse(BaseModel):
     id: int
     title: str
-    abstract: Optional[str]
-    content: Optional[str]
-    summary: Optional[str]
+    abstract: str | None
+    content: str | None
+    summary: str | None
     summary_status: str
-    summary_error: Optional[str]
+    summary_error: str | None
     is_public: bool
     created_at: datetime
-    updated_at: Optional[datetime]
+    updated_at: datetime | None
     owner_id: int
-    category_id: Optional[int]
-    category: Optional[CategoryResponse] = None
+    category_id: int | None
+    category: CategoryResponse | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -159,16 +160,16 @@ class PaperListResponse(BaseModel):
 
     id: int
     title: str
-    abstract: Optional[str]
-    summary: Optional[str]
+    abstract: str | None
+    summary: str | None
     summary_status: str
-    summary_error: Optional[str]
+    summary_error: str | None
     is_public: bool
     created_at: datetime
-    updated_at: Optional[datetime]
+    updated_at: datetime | None
     owner_id: int
-    category_id: Optional[int]
-    category: Optional[CategoryResponse] = None
+    category_id: int | None
+    category: CategoryResponse | None = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -193,13 +194,13 @@ class CollectionCreate(BaseModel):
 
 
 class CollectionUpdate(BaseModel):
-    name: Optional[str] = Field(
+    name: str | None = Field(
         None, min_length=1, max_length=COLLECTION_NAME_MAX_LENGTH
     )
 
     @field_validator("name")
     @classmethod
-    def name_must_not_be_blank(cls, value: Optional[str]) -> Optional[str]:
+    def name_must_not_be_blank(cls, value: str | None) -> str | None:
         if value is not None and not value.strip():
             raise ValueError("Collection name must not be blank")
         return value
@@ -213,11 +214,11 @@ class CollectionResponse(BaseModel):
     id: int
     name: str
     created_at: datetime
-    updated_at: Optional[datetime]
+    updated_at: datetime | None
     owner_id: int
 
     model_config = ConfigDict(from_attributes=True)
 
 
 class CollectionWithPapers(CollectionResponse):
-    papers: List[PaperListResponse] = []
+    papers: list[PaperListResponse] = []

@@ -1,21 +1,20 @@
-from typing import Dict
 
-from fastapi import APIRouter, Depends, HTTPException, status, Query
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import func, select
 from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
 from sqlalchemy.orm import selectinload
 
+from app.api.deps import get_current_user
 from app.core.logging import logger
 from app.db.database import get_db
 from app.db.models import Collection, Paper, User
 from app.schemas.schemas import (
     CollectionCreate,
-    CollectionUpdate,
     CollectionResponse,
+    CollectionUpdate,
     CollectionWithPapers,
     PaginationResponse,
 )
-from app.api.deps import get_current_user
 
 router = APIRouter(prefix="/collections", tags=["Collections"])
 
@@ -147,7 +146,7 @@ async def add_paper_to_collection(
     paper_id: int,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
-) -> Dict[str, str]:
+) -> dict[str, str]:
     collection_result = await db.execute(
         select(Collection)
         .options(selectinload(Collection.papers))

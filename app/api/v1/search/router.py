@@ -1,18 +1,20 @@
 import asyncio
 
 from fastapi import APIRouter, Depends, HTTPException, Query
-from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import or_, select
+from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.orm import selectinload
 
+from app.api.deps import get_current_user
 from app.db.database import get_db
 from app.db.models import Paper, User
-from app.schemas.schemas import PaperListResponse, PaginationResponse
-from app.api.deps import get_current_user
 from app.ml.index_manager import (
-    search_user_papers as search_user_papers_idx,
     search_public_papers as search_public_papers_idx,
 )
+from app.ml.index_manager import (
+    search_user_papers as search_user_papers_idx,
+)
+from app.schemas.schemas import PaginationResponse, PaperListResponse
 
 router = APIRouter(prefix="/search", tags=["Search"])
 
