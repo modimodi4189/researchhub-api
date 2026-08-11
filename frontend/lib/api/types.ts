@@ -37,6 +37,10 @@ export type Collection = {
   owner_id: number;
 };
 
+export type CollectionWithPapers = Collection & {
+  papers: PaperListItem[];
+};
+
 export type PaginationResponse<T> = {
   items: T[];
   total: number;
