@@ -78,6 +78,14 @@ class RefreshRequest(BaseModel):
 # Papers
 # ---------------------------------------------------------------------------
 
+class CategoryResponse(BaseModel):
+    id: int
+    name: str
+    description: Optional[str]
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 class PaperCreate(BaseModel):
     title: str = Field(..., min_length=1, max_length=PAPER_TITLE_MAX_LENGTH)
     abstract: Optional[str] = Field(None, max_length=PAPER_ABSTRACT_MAX_LENGTH)
@@ -141,6 +149,7 @@ class PaperResponse(BaseModel):
     updated_at: Optional[datetime]
     owner_id: int
     category_id: Optional[int]
+    category: Optional[CategoryResponse] = None
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -159,6 +168,7 @@ class PaperListResponse(BaseModel):
     updated_at: Optional[datetime]
     owner_id: int
     category_id: Optional[int]
+    category: Optional[CategoryResponse] = None
 
     model_config = ConfigDict(from_attributes=True)
 

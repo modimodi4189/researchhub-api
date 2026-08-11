@@ -393,6 +393,37 @@ async def test_classify_paper_persists_category(auth_client, created_paper):
     assert r.status_code == 200
     data = r.json()
     assert data["category_id"] is not None
+    assert data["category"]["name"] == "Machine Learning"
+
+
+async def test_classify_paper_reuses_existing_category_case_insensitively(
+    auth_client, created_paper, monkeypatch
+):
+    client, _ = auth_client
+
+    first = await client.post(f"/api/v1/papers/{created_paper['id']}/classify")
+    assert first.status_code == 200
+    category_id = first.json()["category_id"]
+
+    second_paper = await client.post(
+        "/api/v1/papers",
+        json={
+            "title": "Another ML Paper",
+            "abstract": "Another paper about machine learning systems.",
+            "is_public": True,
+        },
+    )
+    assert second_paper.status_code == 201
+
+    monkeypatch.setattr(
+        "app.api.v1.papers.router.classify_paper",
+        lambda text: {"category": "machine learning", "confidence": 0.95},
+    )
+
+    second = await client.post(f"/api/v1/papers/{second_paper.json()['id']}/classify")
+    assert second.status_code == 200
+    assert second.json()["category_id"] == category_id
+    assert second.json()["category"]["name"] == "Machine Learning"
 
 
 async def test_classify_paper_failure_does_not_update_category(

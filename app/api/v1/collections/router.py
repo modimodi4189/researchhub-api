@@ -75,7 +75,7 @@ async def get_collection(
 ) -> CollectionWithPapers:
     result = await db.execute(
         select(Collection)
-        .options(selectinload(Collection.papers))
+        .options(selectinload(Collection.papers).selectinload(Paper.category))
         .where(Collection.id == collection_id, Collection.owner_id == current_user.id)
     )
     collection = result.scalar_one_or_none()

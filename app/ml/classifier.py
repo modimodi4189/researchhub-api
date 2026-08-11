@@ -3,16 +3,21 @@ from transformers import pipeline
 classifier = None
 
 DEFAULT_CATEGORIES = [
-    "computer science",
-    "machine learning",
-    "artificial intelligence",
-    "physics",
-    "biology",
-    "chemistry",
-    "mathematics",
-    "medicine",
-    "economics",
-    "psychology",
+    "Machine Learning",
+    "Artificial Intelligence",
+    "Software Engineering",
+    "Computer Science",
+    "Civil Engineering",
+    "Mechanical Engineering",
+    "Electrical Engineering",
+    "History",
+    "Physics",
+    "Biology",
+    "Chemistry",
+    "Mathematics",
+    "Medicine",
+    "Economics",
+    "Psychology",
 ]
 
 

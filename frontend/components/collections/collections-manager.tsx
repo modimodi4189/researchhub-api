@@ -690,7 +690,8 @@ function CollectionPaperRow({
         </p>
       </div>
       <div className="text-sm text-muted-foreground">
-        {paper.category_id ? `#${paper.category_id}` : "Unassigned"}
+        {paper.category?.name ??
+          (paper.category_id ? `#${paper.category_id}` : "Unassigned")}
       </div>
       <time className="text-sm text-muted-foreground" dateTime={updatedAt}>
         {formatDate(updatedAt)}

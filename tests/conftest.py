@@ -180,7 +180,7 @@ def _mock_ml(monkeypatch):
     monkeypatch.setattr("app.tasks.processing.summarize_text", lambda text: "Mocked summary.")
     monkeypatch.setattr(
         "app.api.v1.papers.router.classify_paper",
-        lambda text: {"category": "machine learning", "confidence": 0.95},
+        lambda text: {"category": "Machine Learning", "confidence": 0.95},
     )
     monkeypatch.setattr(
         "app.api.v1.search.router.search_user_papers_idx",

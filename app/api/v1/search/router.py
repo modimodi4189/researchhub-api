@@ -3,6 +3,7 @@ import asyncio
 from fastapi import APIRouter, Depends, HTTPException, Query
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy import or_, select
+from sqlalchemy.orm import selectinload
 
 from app.db.database import get_db
 from app.db.models import Paper, User
@@ -47,7 +48,7 @@ async def search_my_papers(
         select(Paper).where(
             Paper.id.in_(paper_ids),
             Paper.owner_id == current_user.id,
-        )
+        ).options(selectinload(Paper.category))
     )
     papers = _preserve_order(result.scalars().all(), paper_ids)
 
@@ -77,7 +78,7 @@ async def search_public_papers(
         select(Paper).where(
             Paper.id.in_(paper_ids),
             Paper.is_public.is_(True),
-        )
+        ).options(selectinload(Paper.category))
     )
     papers = _preserve_order(result.scalars().all(), paper_ids)
 
@@ -97,7 +98,9 @@ async def find_similar_papers(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> PaginationResponse[PaperListResponse]:
-    paper_result = await db.execute(select(Paper).where(Paper.id == paper_id))
+    paper_result = await db.execute(
+        select(Paper).options(selectinload(Paper.category)).where(Paper.id == paper_id)
+    )
     paper = paper_result.scalar_one_or_none()
 
     if not paper:
@@ -128,7 +131,7 @@ async def find_similar_papers(
         select(Paper).where(
             Paper.id.in_(paper_ids),
             or_(Paper.is_public.is_(True), Paper.owner_id == current_user.id),
-        )
+        ).options(selectinload(Paper.category))
     )
     similar_papers = _preserve_order(similar_result.scalars().all(), paper_ids)
 

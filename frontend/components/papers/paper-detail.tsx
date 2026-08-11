@@ -350,7 +350,10 @@ function PaperDetailContent({
           <MetaTile
             icon={Hash}
             label="Category"
-            value={paper.category_id ? `#${paper.category_id}` : "Unassigned"}
+            value={
+              paper.category?.name ??
+              (paper.category_id ? `#${paper.category_id}` : "Unassigned")
+            }
           />
           {dates.map((date) => (
             <MetaTile

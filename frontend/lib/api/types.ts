@@ -12,6 +12,12 @@ export type Token = {
   token_type: "bearer" | string;
 };
 
+export type Category = {
+  id: number;
+  name: string;
+  description: string | null;
+};
+
 export type Paper = {
   id: number;
   title: string;
@@ -25,6 +31,7 @@ export type Paper = {
   updated_at: IsoDateString | null;
   owner_id: number;
   category_id: number | null;
+  category: Category | null;
 };
 
 export type PaperListItem = Omit<Paper, "content">;
