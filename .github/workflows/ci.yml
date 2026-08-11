@@ -49,7 +49,7 @@ jobs:
 
       - name: Run linter
         run: |
-          pip install ruff
+          pip install ruff==0.16.2
           ruff check app/ tests/
 
       - name: Run migrations

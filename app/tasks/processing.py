@@ -1,10 +1,15 @@
+import asyncio
+
 from app.celery import celery_app
+from app.core.logging import logger
+from app.db.database import AsyncSessionLocal
+from app.db.models import Paper
 from app.ml.index_manager import (
     add_paper_to_index,
     remove_paper_from_index,
     update_paper_in_index,
 )
-from app.core.logging import logger
+from app.ml.summarizer import summarize_text
 
 
 @celery_app.task(name="process_paper")
@@ -65,3 +70,44 @@ def update_paper_index_task(
     except Exception:
         logger.exception(f"Error updating index for paper {paper_id}")
         raise
+
+
+@celery_app.task(name="summarize_paper_task")
+def summarize_paper_task(paper_id: int):
+    """
+    Generate and persist a paper summary outside the HTTP request path.
+
+    The summarization model may need a large first-time download/load. Keeping
+    this work in Celery lets the API return quickly and lets the frontend poll
+    the paper status instead of waiting on a long-running request.
+    """
+    return asyncio.run(_summarize_paper_async(paper_id))
+
+
+async def _summarize_paper_async(paper_id: int):
+    async with AsyncSessionLocal() as db:
+        paper = await db.get(Paper, paper_id)
+        if paper is None:
+            logger.warning(f"Cannot summarize missing paper {paper_id}")
+            return {"status": "missing", "paper_id": paper_id}
+
+        paper.summary_status = "processing"
+        paper.summary_error = None
+        await db.commit()
+
+        try:
+            summary = summarize_text(paper.content or "")
+        except (OSError, RuntimeError, ValueError) as exc:
+            paper.summary_status = "failed"
+            paper.summary_error = str(exc)[:1000]
+            await db.commit()
+            logger.exception(f"Error summarizing paper {paper_id}")
+            return {"status": "failed", "paper_id": paper_id}
+
+        paper.summary = summary
+        paper.summary_status = "complete"
+        paper.summary_error = None
+        await db.commit()
+
+        logger.info(f"Successfully summarized paper {paper_id}")
+        return {"status": "completed", "paper_id": paper_id}

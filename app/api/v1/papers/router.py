@@ -1,19 +1,27 @@
 import asyncio
-from fastapi import APIRouter, Depends, HTTPException, status, Query
-from sqlalchemy.ext.asyncio import AsyncSession
-from sqlalchemy import select, func
 
+from fastapi import APIRouter, Depends, HTTPException, Query, status
+from sqlalchemy import func, select
+from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy.orm import selectinload
+
+from app.api.deps import get_current_user
 from app.core.executor import ml_executor
 from app.core.logging import logger
 from app.db.database import get_db
-from app.db.models import Paper, User, Category
-from app.ml.classifier import classify_paper
-from app.ml.summarizer import summarize_text
-from app.schemas.schemas import PaperCreate, PaperUpdate, PaperResponse, PaperListResponse, PaginationResponse
-from app.api.deps import get_current_user
+from app.db.models import Category, Paper, User
+from app.ml.classifier import DEFAULT_CATEGORIES, classify_paper
+from app.schemas.schemas import (
+    PaginationResponse,
+    PaperCreate,
+    PaperListResponse,
+    PaperResponse,
+    PaperUpdate,
+)
 from app.tasks.processing import (
     process_paper,
     remove_paper_from_index_task,
+    summarize_paper_task,
     update_paper_index_task,
 )
 
@@ -31,6 +39,22 @@ async def _ensure_category_exists(category_id: int | None, db: AsyncSession) -> 
     result = await db.execute(select(Category.id).where(Category.id == category_id))
     if result.scalar_one_or_none() is None:
         raise HTTPException(status_code=404, detail="Category not found")
+
+
+async def _get_category_by_name(name: str, db: AsyncSession) -> Category | None:
+    return (
+        await db.execute(
+            select(Category).where(func.lower(Category.name) == name.strip().lower())
+        )
+    ).scalar_one_or_none()
+
+
+def _canonical_category_name(name: str) -> str:
+    cleaned_name = name.strip()
+    for category in DEFAULT_CATEGORIES:
+        if category.lower() == cleaned_name.lower():
+            return category
+    return cleaned_name
 
 
 @router.post("", response_model=PaperResponse, status_code=status.HTTP_201_CREATED)
@@ -60,6 +84,9 @@ async def create_paper(
     if index_text:
         process_paper.delay(new_paper.id, index_text, current_user.id, new_paper.is_public)
 
+    if new_paper.category_id:
+        await db.refresh(new_paper, attribute_names=["category"])
+
     return new_paper
 
 
@@ -79,6 +106,7 @@ async def get_papers(
 
     result = await db.execute(
         select(Paper)
+        .options(selectinload(Paper.category))
         .where(Paper.owner_id == current_user.id)
         .offset(offset)
         .limit(limit)
@@ -101,7 +129,9 @@ async def get_paper(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> PaperResponse:
-    result = await db.execute(select(Paper).where(Paper.id == paper_id))
+    result = await db.execute(
+        select(Paper).options(selectinload(Paper.category)).where(Paper.id == paper_id)
+    )
     paper = result.scalar_one_or_none()
 
     if not paper:
@@ -119,7 +149,9 @@ async def update_paper(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> PaperResponse:
-    result = await db.execute(select(Paper).where(Paper.id == paper_id))
+    result = await db.execute(
+        select(Paper).options(selectinload(Paper.category)).where(Paper.id == paper_id)
+    )
     paper = result.scalar_one_or_none()
 
     if not paper:
@@ -140,6 +172,8 @@ async def update_paper(
 
     await db.commit()
     await db.refresh(paper)
+    if paper.category_id:
+        await db.refresh(paper, attribute_names=["category"])
 
     new_index_text = _paper_index_text(paper)
     should_update_index = (
@@ -166,7 +200,9 @@ async def delete_paper(
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> None:
-    result = await db.execute(select(Paper).where(Paper.id == paper_id))
+    result = await db.execute(
+        select(Paper).options(selectinload(Paper.category)).where(Paper.id == paper_id)
+    )
     paper = result.scalar_one_or_none()
 
     if not paper:
@@ -187,13 +223,19 @@ async def delete_paper(
     logger.info(f"User {current_user.id} deleted paper {paper_id}")
 
 
-@router.post("/{paper_id}/summarize", response_model=PaperResponse)
+@router.post(
+    "/{paper_id}/summarize",
+    response_model=PaperResponse,
+    status_code=status.HTTP_202_ACCEPTED,
+)
 async def summarize_paper(
     paper_id: int,
     db: AsyncSession = Depends(get_db),
     current_user: User = Depends(get_current_user),
 ) -> PaperResponse:
-    result = await db.execute(select(Paper).where(Paper.id == paper_id))
+    result = await db.execute(
+        select(Paper).options(selectinload(Paper.category)).where(Paper.id == paper_id)
+    )
     paper = result.scalar_one_or_none()
 
     if not paper:
@@ -202,22 +244,20 @@ async def summarize_paper(
         raise HTTPException(status_code=403, detail="Not authorized")
     if not paper.content:
         raise HTTPException(status_code=422, detail="Paper has no content to summarize")
-
-    loop = asyncio.get_running_loop()
-    try:
-        summary = await loop.run_in_executor(ml_executor, summarize_text, paper.content)
-    except Exception as exc:
-        logger.exception(f"Failed to generate summary for paper {paper_id}")
+    if paper.summary_status in {"queued", "processing"}:
         raise HTTPException(
-            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
-            detail="Summary generation failed",
-        ) from exc
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Summary generation is already in progress",
+        )
 
-    paper.summary = summary
+    paper.summary_status = "queued"
+    paper.summary_error = None
     await db.commit()
     await db.refresh(paper)
 
-    logger.info(f"Generated summary for paper {paper_id}")
+    summarize_paper_task.delay(paper.id)
+
+    logger.info(f"Queued summary generation for paper {paper_id}")
     return paper
 
 
@@ -251,19 +291,22 @@ async def classify_paper_endpoint(
 
     category_name = classification.get("category")
     if category_name and category_name != "unknown":
-        cat_result = await db.execute(
-            select(Category).where(Category.name == category_name)
-        )
-        category = cat_result.scalar_one_or_none()
+        category_name = _canonical_category_name(category_name)
+        category = await _get_category_by_name(category_name, db)
         if not category:
             category = Category(name=category_name)
             db.add(category)
             await db.flush()
+        elif category.name != category_name:
+            category.name = category_name
 
         paper.category_id = category.id
+        paper.category = category
 
     await db.commit()
     await db.refresh(paper)
+    if paper.category_id:
+        await db.refresh(paper, attribute_names=["category"])
 
     logger.info(f"Classified paper {paper_id}: {category_name}")
     return paper

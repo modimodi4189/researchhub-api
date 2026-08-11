@@ -1,5 +1,5 @@
-from sqlalchemy import Column, Integer, String, Text, Boolean, DateTime, ForeignKey, Table, func
-from sqlalchemy.orm import relationship, DeclarativeBase
+from sqlalchemy import Boolean, Column, DateTime, ForeignKey, Integer, String, Table, Text, func
+from sqlalchemy.orm import DeclarativeBase, relationship
 
 
 class Base(DeclarativeBase):
@@ -44,6 +44,8 @@ class Paper(Base):
     abstract = Column(Text, nullable=True)
     content = Column(Text, nullable=True)
     summary = Column(Text, nullable=True)
+    summary_status = Column(String, nullable=False, default="idle", server_default="idle")
+    summary_error = Column(Text, nullable=True)
     is_public = Column(Boolean, default=False)
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())

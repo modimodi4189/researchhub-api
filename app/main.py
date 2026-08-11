@@ -1,18 +1,18 @@
 from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
-from typing import Dict
 
+from app.api.v1.auth.router import router as auth_router
+from app.api.v1.collections.router import router as collections_router
+from app.api.v1.papers.router import router as papers_router
+from app.api.v1.search.router import router as search_router
 from app.core.config import settings
 from app.core.limiter import limiter
 from app.core.logging import logger
-from app.api.v1.auth.router import router as auth_router
-from app.api.v1.papers.router import router as papers_router
-from app.api.v1.collections.router import router as collections_router
-from app.api.v1.search.router import router as search_router
 
 
 @asynccontextmanager
@@ -61,10 +61,10 @@ app.include_router(search_router, prefix="/api/v1")
 
 
 @app.get("/")
-async def root() -> Dict[str, str]:
+async def root() -> dict[str, str]:
     return {"message": "Welcome to ResearchHub API"}
 
 
 @app.get("/health")
-async def health_check() -> Dict[str, str]:
+async def health_check() -> dict[str, str]:
     return {"status": "healthy"}

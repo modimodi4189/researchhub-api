@@ -3,16 +3,21 @@ from transformers import pipeline
 classifier = None
 
 DEFAULT_CATEGORIES = [
-    "computer science",
-    "machine learning",
-    "artificial intelligence",
-    "physics",
-    "biology",
-    "chemistry",
-    "mathematics",
-    "medicine",
-    "economics",
-    "psychology",
+    "Machine Learning",
+    "Artificial Intelligence",
+    "Software Engineering",
+    "Computer Science",
+    "Civil Engineering",
+    "Mechanical Engineering",
+    "Electrical Engineering",
+    "History",
+    "Physics",
+    "Biology",
+    "Chemistry",
+    "Mathematics",
+    "Medicine",
+    "Economics",
+    "Psychology",
 ]
 
 
@@ -27,7 +32,7 @@ def get_classifier():
     return classifier
 
 
-def classify_paper(text: str, candidate_labels: list = None) -> dict:
+def classify_paper(text: str, candidate_labels: list[str] | None = None) -> dict:
     if not text or len(text.strip()) < 50:
         return {"category": "unknown", "confidence": 0.0}
 
